@@ -12,11 +12,15 @@ COPY examples ./examples
 RUN cargo build --release --bin bitcompact && strip target/release/bitcompact && ls -lh target/release/bitcompact
 
 FROM debian:bookworm-slim AS runtime
+LABEL org.opencontainers.image.source="https://github.com/TheElephantCoder/bit-compact"
+LABEL org.opencontainers.image.description="bit-compact — SQ8 embedding compression, 4× smaller, 1 seek, Docker GUI"
+LABEL org.opencontainers.image.licenses="MIT OR Apache-2.0"
+LABEL org.opencontainers.image.vendor="TheElephantCoder"
+
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates tini && rm -rf /var/lib/apt/lists/*
 WORKDIR /data
 
 COPY --from=builder /app/target/release/bitcompact /usr/local/bin/bitcompact
-# ensure binary is executable and check
 RUN bitcompact --help || true
 
 EXPOSE 8080
