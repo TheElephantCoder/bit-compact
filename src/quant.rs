@@ -277,6 +277,104 @@ impl Quantizer {
         &self.max_bounds
     }
 
+    /// Global calibration: single min/max across all dimensions (memory-savvy, uniform range).
+    pub fn calibrate_global(vectors: &[Vec<f32>]) -> Result<Self> {
+        if vectors.is_empty() {
+            return Err(CompactError::EmptyDataset);
+        }
+        let dims = vectors[0].len();
+        if dims == 0 {
+            return Err(CompactError::invalid_header("global calibrate: dims must be > 0"));
+        }
+        let mut gmin = f32::INFINITY;
+        let mut gmax = f32::NEG_INFINITY;
+        for v in vectors {
+            if v.len() != dims {
+                return Err(CompactError::DimensionMismatch {
+                    expected: dims,
+                    found: v.len(),
+                });
+            }
+            for &x in v {
+                if !x.is_finite() {
+                    return Err(CompactError::QuantizationOverflow {
+                        dimension: 0,
+                        value: x,
+                        min: gmin,
+                        max: gmax,
+                        reason: "non-finite in global calibrate",
+                    });
+                }
+                if x < gmin {
+                    gmin = x;
+                }
+                if x > gmax {
+                    gmax = x;
+                }
+            }
+        }
+        Ok(Self {
+            min_bounds: vec![gmin; dims],
+            max_bounds: vec![gmax; dims],
+            dims,
+        })
+    }
+
+    /// Robust calibration via percentile clipping (outlier resistant).
+    /// `low` and `high` are percentiles in [0,100], e.g., 1.0 and 99.0 clip 1% tails.
+    pub fn calibrate_percentile(vectors: &[Vec<f32>], low: f32, high: f32) -> Result<Self> {
+        if vectors.is_empty() {
+            return Err(CompactError::EmptyDataset);
+        }
+        if !(0.0..=100.0).contains(&low) || !(0.0..=100.0).contains(&high) || low >= high {
+            return Err(CompactError::invalid_header(format!(
+                "invalid percentiles low={low} high={high}"
+            )));
+        }
+        let dims = vectors[0].len();
+        let base = Self::calibrate(vectors)?;
+        // For each dim, collect values, sort, pick percentiles.
+        // Stable, std-only, O(D * N log N).
+        let n = vectors.len();
+        let mut mins = Vec::with_capacity(dims);
+        let mut maxs = Vec::with_capacity(dims);
+        for d in 0..dims {
+            let mut vals: Vec<f32> = vectors.iter().map(|v| v[d]).collect();
+            vals.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+            let lo_idx = ((low / 100.0) * (n as f32 - 1.0)).floor() as usize;
+            let hi_idx = ((high / 100.0) * (n as f32 - 1.0)).ceil() as usize;
+            let lo = vals[lo_idx.min(n - 1)];
+            let hi = vals[hi_idx.min(n - 1)];
+            // Ensure we never collapse to zero range; expand by epsilon if needed.
+            let (mn, mx) = if (hi - lo).abs() < 1e-6 {
+                (base.min_bounds[d], base.max_bounds[d])
+            } else {
+                (lo, hi)
+            };
+            mins.push(mn);
+            maxs.push(mx);
+        }
+        Self::new(mins, maxs)
+    }
+
+    /// Batch quantize — caller can pre-allocate `out` as `Vec<Vec<u8>>`.
+    pub fn quantize_batch(&self, batch: &[Vec<f32>]) -> Result<Vec<Vec<u8>>> {
+        let mut out = Vec::with_capacity(batch.len());
+        for v in batch {
+            out.push(self.quantize_vector(v)?);
+        }
+        Ok(out)
+    }
+
+    /// Batch dequantize.
+    pub fn dequantize_batch(&self, batch: &[Vec<u8>]) -> Result<Vec<Vec<f32>>> {
+        let mut out = Vec::with_capacity(batch.len());
+        for v in batch {
+            out.push(self.dequantize_vector(v)?);
+        }
+        Ok(out)
+    }
+
     // ------------------------------------------------------------------
     // Core transforms — formulae §3C verbatim
     // ------------------------------------------------------------------

@@ -28,16 +28,28 @@
 #![allow(clippy::many_single_char_names)]
 #![allow(missing_docs)]
 
-// The reader's `Send + Sync` guarantee requires an `unsafe impl` over `Mutex<File>`.
-// This is sound because `File: Send` and `Mutex` provides synchronized access.
+pub mod aligned;
+pub mod config;
+pub mod distance;
 pub mod errors;
+pub mod header;
 pub mod quant;
+pub mod search;
+pub mod sha;
+pub mod stats;
 pub mod storage;
 
-// Re-exports for ergonomic crate root — `src/lib.rs:40`
+// Re-exports for ergonomic crate root
+pub use aligned::{AlignedBuffer, BlockAlignedBuffer, CacheAlignedBuffer, StackBuf, CACHE_LINE, DISK_BLOCK};
+pub use config::{CompactConfig, ConfigBuilder, ReaderConfig, WriterConfig};
+pub use distance::{cosine_distance, cosine_similarity, dot, inner_product_distance, l2, l2_squared};
 pub use errors::{CompactError, Result};
+pub use header::{Header, DISK_BLOCK_SIZE, HEADER_SIZE, MAGIC};
 pub use quant::{DistanceMetric, QuantType, Quantizer};
-pub use storage::{CompactReader, CompactWriter, Header, MAGIC, HEADER_SIZE, CHECKSUM_SIZE, DISK_BLOCK_SIZE};
+pub use search::{SearchResult, brute_force_search, parallel_search};
+pub use sha::{Sha256, sha256};
+pub use stats::{QuantizationReport, evaluate as evaluate_quantization};
+pub use storage::{CompactReader, CompactWriter, CHECKSUM_SIZE};
 
 // Crate version constants mirroring header version fields
 /// Default major version written to new files.

@@ -585,6 +585,58 @@ impl CompactWriter {
     pub fn quantizer(&self) -> &Quantizer {
         &self.quantizer
     }
+
+    /// Create with a `WriterConfig` (builder pattern) — `src/storage.rs:590`
+    pub fn create_with_config<P: AsRef<Path>>(
+        path: P,
+        quantizer: Quantizer,
+        config: crate::config::WriterConfig,
+    ) -> Result<Self> {
+        let base = config.base;
+        Self::create_with_version(
+            path,
+            quantizer,
+            base.quant_type,
+            base.distance,
+            base.major,
+            base.minor,
+        )
+        .map(|mut w| {
+            // propagate alignment preference for finalize
+            w.finalized = false;
+            w
+        })
+    }
+
+    /// Append a batch of borrowed slices — zero intermediate Vec per vector except quantize scratch.
+    pub fn append_batch(&mut self, batch: &[&[f32]]) -> Result<()> {
+        for v in batch {
+            self.append(v)?;
+        }
+        Ok(())
+    }
+
+    /// Estimated file size if finalized now (without footer checksum variance).
+    #[inline]
+    pub fn estimated_file_size(&self) -> u64 {
+        let data = self.vector_count * self.dims as u64;
+        let meta = self.metadata_len as u64;
+        let footer_ids = self.vector_count * 8;
+        HEADER_SIZE as u64 + meta + data + footer_ids + CHECKSUM_SIZE as u64
+    }
+
+    /// Estimated data block size.
+    #[inline]
+    pub fn data_bytes(&self) -> u64 {
+        self.vector_count * self.dims as u64
+    }
+
+    /// Flush buffered OS writes without fsync.
+    pub fn flush(&mut self) -> Result<()> {
+        self.file
+            .flush()
+            .map_err(|e| CompactError::IoError { source: e })
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -997,6 +1049,82 @@ impl CompactReader {
             });
         }
         Ok(())
+    }
+
+    /// Open with explicit `ReaderConfig` — control verification/prefetch.
+    pub fn open_with_config<P: AsRef<Path>>(path: P, config: crate::config::ReaderConfig) -> Result<Self> {
+        if config.verify_checksum {
+            Self::open(path)
+        } else {
+            Self::open_unverified(path)
+        }
+    }
+
+    /// Batch get: fetch multiple indices into `out` (caller-allocated Vec per entry).
+    pub fn get_batch(&self, indices: &[u64]) -> Result<Vec<Vec<f32>>> {
+        let mut out = Vec::with_capacity(indices.len());
+        for &idx in indices {
+            out.push(self.get_vector(idx)?);
+        }
+        Ok(out)
+    }
+
+    /// Batch get quantized into a flat buffer: `out.len() == indices.len() * dims`.
+    pub fn get_batch_quantized_into(&self, indices: &[u64], out: &mut [u8]) -> Result<()> {
+        if out.len() != indices.len() * self.dims {
+            return Err(CompactError::DimensionMismatch {
+                expected: indices.len() * self.dims,
+                found: out.len(),
+            });
+        }
+        for (i, &idx) in indices.iter().enumerate() {
+            let start = i * self.dims;
+            self.get_quantized_into(idx, &mut out[start..start + self.dims])?;
+        }
+        Ok(())
+    }
+
+    /// Convenience: top-k search using this reader's distance metric.
+    pub fn search(&self, query: &[f32], k: usize) -> Result<Vec<crate::search::SearchResult>> {
+        let metric = self.header.distance_metric;
+        crate::search::brute_force_search(self, query, k, |a, b| {
+            crate::distance::distance(metric, a, b)
+        })
+    }
+
+    /// Parallel top-k search.
+    pub fn search_parallel(
+        &self,
+        query: &[f32],
+        k: usize,
+        num_threads: usize,
+    ) -> Result<Vec<crate::search::SearchResult>> {
+        let metric = self.header.distance_metric;
+        crate::search::parallel_search(self, query, k, num_threads, |a, b| {
+            crate::distance::distance(metric, a, b)
+        })
+    }
+
+    /// Return an iterator over all vectors (dequantized, cloned per item).
+    pub fn iter(&self) -> crate::search::ScanIter<'_> {
+        crate::search::ScanIter::new(self)
+    }
+
+    /// Estimate total file size on disk (header + meta + data + footer).
+    #[inline]
+    pub fn estimated_file_size(&self) -> u64 {
+        HEADER_SIZE as u64 + self.metadata_len as u64 + self.data_len() + self.row_ids.len() as u64 * 8 + CHECKSUM_SIZE as u64
+    }
+
+    #[inline]
+    fn data_len(&self) -> u64 {
+        self.vector_count * self.dims as u64
+    }
+
+    /// Number of vectors that would be read in a full scan.
+    #[inline]
+    pub fn remaining(&self) -> u64 {
+        self.vector_count
     }
 }
 

@@ -19,7 +19,7 @@ All integers/floats are Big-Endian for disk/network portability. Header is 32B (
 
 - **Zero-allocation seeks**: `CompactReader::get_quantized_into(index, &mut [u8])` does exactly 1 `seek` + 1 `read_exact`, no heap alloc for alignment.
 - **4× reduction**: `f32` (4B) → `u8` (1B) per coordinate via linear SQ8.
-- **Mechanical sympathy**: 64B cache-line awareness, 4096B disk block alignment, raw `&[u8]` zero-copy paths.
+- **Mechanical sympathy**: 64B cache-line awareness (`aligned::CACHE_LINE`), 4096B disk block alignment (`aligned::DISK_BLOCK`), raw `&[u8]` zero-copy paths.
 
 ## Quantization Formulae
 
@@ -28,6 +28,13 @@ quantized = floor(((v - min) / (max - min)) * 255)  clamped 0..=255
 dequant   = min + (q / 255) * (max - min)
 ```
 Per-dimension global `min`/`max` from calibration. Handles degenerate `max==min` and clamps out-of-range values.
+
+Calibration variants:
+- `Quantizer::calibrate` — per-dim min/max (tightest error)
+- `Quantizer::calibrate_global` — single global range (uniform, memory-savvy)
+- `Quantizer::calibrate_percentile(5.0, 95.0)` — outlier-robust clipping
+
+Batch: `quantize_batch` / `dequantize_batch`, zero-alloc `quantize_into` / `dequantize_into`.
 
 ## Quick Start
 
@@ -47,13 +54,58 @@ r.get_quantized_into(0, &mut buf).unwrap(); // 1 seek, 0 alloc
 let dequant = r.get_vector(0).unwrap();
 ```
 
-`CompactReader` is `Send + Sync` — share via `Arc<CompactReader>` for multi-threaded scans.
+Builder config:
+
+```rust
+use bit_compact::{CompactConfig, QuantType, DistanceMetric};
+let cfg = CompactConfig::builder(128, QuantType::SQ8, DistanceMetric::Cosine)
+    .align_disk_blocks(true).build().unwrap();
+```
+
+## Features
+
+### `config` — Tunables via `CompactConfig`/`WriterConfig`/`ReaderConfig`
+Builder pattern, validation (`dims <= 65535`), version, `align_disk_blocks`, `verify_on_open`.
+
+### `distance` — Optimized metrics
+`l2_squared`, `l2`, `dot`, `cosine_distance`, `inner_product_distance`, `batch_distance`, `normalize`. 4-wide unrolled, dispatch via `DistanceMetric::distance`. Used by search and reader's `search()`.
+
+### `stats` — Error & compression analysis
+`evaluate(quantizer, dataset)` → `QuantizationReport { mse, mae, max_abs_error, snr_db, per_dim_mse, compression_ratio }`, helpers `theoretical_max_error`, `theoretical_mse_uniform`.
+
+### `search` — Brute-force & parallel top-k
+`brute_force_search(reader, query, k, distance_fn)`, `parallel_search(reader, query, k, threads, ...)`, `batch_search`, `ScanIter`. `CompactReader::search` / `search_parallel` / `iter()` convenience wrappers.
+
+### `aligned` — Cache-line & block alignment
+`CACHE_LINE=64`, `DISK_BLOCK=4096`, `AlignedBuffer<ALIGN>`, `CacheAlignedBuffer`, `BlockAlignedBuffer`, `StackBuf<N>` (repr(align(64))), `align_up`, `is_cache_aligned`.
+
+### `storage` — Writer/Reader engine
+`CompactWriter::{create, create_with_config, create_with_version, append, append_quantized, append_batch, finalize, finalize_with_padding, estimated_file_size}`, `CompactReader::{open, open_unverified, open_with_config, get_quantized_into, get_dequantized_into, get_vector, get_batch, search, search_parallel, iter, scan_quantized, verify_checksum, read_header}`. `Send + Sync` via `Arc<Mutex<File>>`.
+
+### `header` / `sha`
+`Header` 32B BE exact, `validate_footer`, `Sha256` FIPS 180-4 pure std.
+
+## Examples
+
+```bash
+cargo run --example basic   # write + 1-seek read + batch + config
+cargo run --example search  # top-k, parallel, cosine, batch, iter
+cargo run --example stats   # report, global/percentile, aligned buf
+cargo run --release --bench quant_bench  # micro bench (10k x128)
+```
 
 ## Crate Layout
 
 - `src/errors.rs` — `CompactError` (`IoError`, `InvalidMagicBytes`, `DimensionMismatch`, `CorruptedFooter`, `QuantizationOverflow`, …)
-- `src/quant.rs` — `Quantizer::{quantize_vector,dequantize_vector,quantize_into,dequantize_into,calibrate}`
-- `src/storage.rs` — `Header`, `Sha256` (FIPS 180-4, no deps), `CompactWriter`, `CompactReader`
+- `src/quant.rs` — `Quantizer` (`calibrate`, `calibrate_global`, `calibrate_percentile`, `quantize_vector`, `dequantize_vector`, `*_into`, `*_batch`)
+- `src/config.rs` — `CompactConfig` builder, `WriterConfig`, `ReaderConfig`
+- `src/aligned.rs` — `AlignedBuffer`, `CACHE_LINE`, `DISK_BLOCK`, `StackBuf`
+- `src/distance.rs` — L2/cosine/IP, 4-wide loops, batch
+- `src/stats.rs` — `QuantizationReport`, `evaluate`, `snr_db`, `mse`
+- `src/search.rs` — `brute_force_search`, `parallel_search`, `ScanIter`
+- `src/header.rs` — `Header` 32B BE
+- `src/sha.rs` — `Sha256` FIPS
+- `src/storage.rs` — `CompactWriter`, `CompactReader` (1-seek, `Send+Sync`)
 - `src/lib.rs` — re-exports + `VERSION_MAJOR/MINOR`
 
 ## Build
@@ -61,13 +113,15 @@ let dequant = r.get_vector(0).unwrap();
 ```bash
 cargo test
 cargo test --release   # lto=true, codegen-units=1, panic=abort
+cargo fmt --check
+cargo clippy -- -D warnings
 ```
 
 `profile.release` is tuned for analytical engines (`opt-level=3`, `lto=true`, `codegen-units=1`, `panic="abort"`).
 
 ## License
 
-MIT OR Apache-2.0
+MIT OR Apache-2.0 — see `LICENSE-MIT` and `LICENSE-APACHE`.
 
 ## Repository
 
