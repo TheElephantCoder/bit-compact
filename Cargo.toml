@@ -1,0 +1,38 @@
+[package]
+name = "bit-compact"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.70"
+description = "Zero-dependency low-level multimodal embedding compression and file format engine (SQ8 scalar quantization, O(1) random access binary storage)."
+license = "MIT OR Apache-2.0"
+keywords = ["quantization", "vector", "compression", "binary-format", "embeddings"]
+categories = ["data-structures", "compression", "parser-implementations"]
+readme = "README.md"
+repository = "https://github.com/TheElephantCoder/bit-compact"
+authors = ["TheElephantCoder"]
+
+[lib]
+name = "bit_compact"
+path = "src/lib.rs"
+crate-type = ["rlib", "cdylib"]
+
+[dependencies]
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+overflow-checks = false
+debug = false
+strip = "symbols"
+
+[profile.bench]
+inherits = "release"
+debug = true
+
+[profile.dev]
+opt-level = 0
+debug = true
+overflow-checks = true
+panic = "unwind"
