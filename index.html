@@ -24,6 +24,7 @@
   <p>Zero-dependency, Big-Endian portable, 32-byte header, SHA-256 verified footer. 4× compression from <code class="inline">f32</code> to <code class="inline">u8</code> with exactly 1 disk seek and 0 heap allocations for quantized reads. <code class="inline">Send + Sync</code> reader, parallel search, LRU cache, batch ingestion, validation and transforms. Now with <code class="inline">bitcompact serve</code> GUI.</p>
   <div class="badges">
     <span class="badge">Rust 1.70+</span>
+    <span class="badge" style="border-color:#0db7ed;color:#0db7ed">Docker</span>
     <span class="badge">MIT OR Apache-2.0</span>
     <span class="badge">no deps = 0</span>
     <span class="badge">lto=true · codegen-units=1 · panic=abort</span>
@@ -33,6 +34,7 @@
   <div class="cta">
     <a class="btn" href="https://github.com/TheElephantCoder/bit-compact">View on GitHub</a>
     <a class="btn ghost" href="#quickstart">Quick start</a>
+    <a class="btn" href="#docker" style="background:#0db7ed;color:white;border-color:#0db7ed">Use on Docker</a>
   </div>
 </div>
 
@@ -40,6 +42,7 @@
   <div class="toc">
     <a href="#layout">Layout</a>
     <a href="#install">Install</a>
+    <a href="#docker">Docker</a>
     <a href="#quickstart">Quick start</a>
     <a href="#modules">Modules</a>
     <a href="#serve">Serve</a>
@@ -87,6 +90,23 @@ cargo test
 cargo test --release   # lto=true codegen-units=1 panic=abort
 cargo run --bin bitcompact -- --help
 cargo run --bin bitcompact -- serve --help</pre>
+
+  <h2 id="docker">Use on Docker</h2>
+  <p>Run without installing Rust — <code class="inline">Dockerfile:1</code> multi-stage (builder <code class="inline">rust:1.77-bookworm</code> → runtime <code class="inline">debian:bookworm-slim</code> + <code class="inline">tini</code>, stripped binary, <code class="inline">EXPOSE 8080</code>).</p>
+  <pre># build
+docker build -t bit-compact .
+
+# CLI (mount your data dir)
+docker run --rm -v $(pwd)/data:/data bit-compact info /data/vectors.btcp
+docker run --rm -v $(pwd)/data:/data bit-compact get /data/vectors.btcp 42
+docker run --rm -v $(pwd)/data:/data bit-compact validate /data/vectors.btcp
+
+# GUI — http://localhost:8080
+docker run --rm -p 8080:8080 -v $(pwd)/data:/data bit-compact serve /data/vectors.btcp --port 8080 --host 0.0.0.0
+
+# create
+docker run --rm -v $(pwd)/data:/data bit-compact create /data/new.btcp --dims 128 --metric cosine --align</pre>
+  <div class="card" style="margin-top:12px"><h3>Why Docker</h3><p>No Rust toolchain needed, reproducible <code class="inline">bookworm-slim</code> runtime, <code class="inline">VOLUME ["/data"]</code> for your <code class="inline">.btcp</code> files, <code class="inline">.dockerignore</code> keeps context small.</p></div>
 
   <h2 id="quickstart">Quick start</h2>
   <pre>use bit_compact::{Quantizer, QuantType, DistanceMetric, CompactWriter, CompactReader};
