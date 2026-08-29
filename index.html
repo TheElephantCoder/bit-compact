@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>bit-compact — SQ8 embedding compression & file format</title>
+<meta name="description" content="Zero-dependency Rust engine for SQ8 scalar quantization, Big-Endian 32B header, 4× compression, 1-seek zero-alloc reads.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<nav>
+  <div class="container">
+    <div class="brand">bit<span>-compact</span> <span style="font-weight:400;color:var(--muted);font-size:13px;margin-left:8px;">0.1.0</span></div>
+    <div class="links">
+      <a href="https://github.com/TheElephantCoder/bit-compact">GitHub</a>
+      <a href="https://github.com/TheElephantCoder/bit-compact#readme">README</a>
+      <a href="#api">API</a>
+    </div>
+  </div>
+</nav>
+
+<div class="container hero">
+  <h1>Scalar-quantized<br><span>embedding storage</span> in Rust.</h1>
+  <p>Zero-dependency, Big-Endian portable, 32-byte header, SHA-256 verified footer. 4× compression from <code class="inline">f32</code> to <code class="inline">u8</code> with exactly 1 disk seek and 0 heap allocations for quantized reads. <code class="inline">Send + Sync</code> reader for parallel scans.</p>
+  <div class="badges">
+    <span class="badge">Rust 1.70+</span>
+    <span class="badge">MIT OR Apache-2.0</span>
+    <span class="badge">no_std deps = 0</span>
+    <span class="badge">lto=true · codegen-units=1 · panic=abort</span>
+  </div>
+  <div class="cta">
+    <a class="btn" href="https://github.com/TheElephantCoder/bit-compact">View on GitHub</a>
+    <a class="btn ghost" href="#quickstart">Quick start</a>
+  </div>
+</div>
+
+<div class="container">
+  <div class="toc">
+    <a href="#layout">Layout</a>
+    <a href="#install">Install</a>
+    <a href="#quickstart">Quick start</a>
+    <a href="#modules">Modules</a>
+    <a href="#reader">Reader</a>
+    <a href="#search">Search</a>
+    <a href="#stats">Stats</a>
+    <a href="#perf">Perf</a>
+  </div>
+
+  <div class="grid">
+    <div class="card"><h3>4× smaller</h3><p><code class="inline">f32</code> (4B) → <code class="inline">u8</code> (1B) per coordinate. Linear SQ8 per-dimension, clamped floor, degenerate range handled.</p></div>
+    <div class="card"><h3>1 seek, 0 alloc</h3><p><code class="inline">get_quantized_into(id, &amp;mut [u8])</code> is exactly one <code class="inline">seek</code> + <code class="inline">read_exact</code>. Use a 64B stack buf for cache-line alignment.</p></div>
+    <div class="card"><h3>Verified on disk</h3><p>Header is 32B BE (BTCP magic, reserved 2B for 8B align), data block SHA-256 in footer, optional 4096B block padding.</p></div>
+  </div>
+
+  <h2 id="layout">Binary layout — Big-Endian</h2>
+  <pre>Header (32B):  MAGIC "BTCP" 4B
+           major u16 BE | minor u16 BE | dims u16 BE | quant u16 BE | distance u16 BE | reserved u16 0
+           vector_count u64 BE | footer_offset u64 BE
+
+Metadata (2*dims*4B):  min_vec [f32; dims] BE  |  max_vec [f32; dims] BE
+Data (count*dims*1B):  [u8; count*dims]  — continuous quantized bytes
+Footer (@footer_offset):  row_ids [u64; count] BE  |  sha256 [u8; 32]  — hash of data block
+</pre>
+  <p class="muted">Header is half a 64B cache line; footer may be padded to the next 4096B boundary with <code class="inline">finalize_with_padding(true)</code>. All floats/ints are BE for portability. See <code class="inline">src/header.rs</code> and <code class="inline">src/storage.rs</code>.</p>
+  <table>
+    <tr><th>Field</th><th>Size</th><th>Notes</th></tr>
+    <tr><td>MAGIC</td><td>4B</td><td><code class="inline">BTCP</code>, checked on open</td></tr>
+    <tr><td>version</td><td>2+2B</td><td><code class="inline">major/minor u16</code>, default 1.0</td></tr>
+    <tr><td>dims / quant / distance</td><td>2+2+2B</td><td>dims ≤ 65535, quant 0=Raw 1=SQ8 2=PQ, distance 0=L2 1=Cosine 2=IP</td></tr>
+    <tr><td>reserved</td><td>2B</td><td>0, aligns u64 to 8B and header to 32B</td></tr>
+    <tr><td>count / footer_offset</td><td>8+8B</td><td>patched on <code class="inline">finalize()</code></td></tr>
+  </table>
+
+  <h2 id="install">Install</h2>
+  <pre>Cargo.toml
+[dependencies]
+bit-compact = { git = "https://github.com/TheElephantCoder/bit-compact" }
+# or after crates.io publish:
+# bit-compact = "0.1"</pre>
+  <pre>cargo add bit-compact
+cargo test
+cargo test --release   # lto=true codegen-units=1 panic=abort</pre>
+
+  <h2 id="quickstart">Quick start</h2>
+  <pre>use bit_compact::{Quantizer, QuantType, DistanceMetric, CompactWriter, CompactReader};
+
+let dataset = vec![vec![0.0, 1.0, 2.0], vec![3.0, 4.0, 5.0]];
+let q = Quantizer::calibrate(&dataset).unwrap();
+
+let mut w = CompactWriter::create("vectors.btcp", q, QuantType::SQ8, DistanceMetric::L2).unwrap();
+for v in &amp;dataset { w.append(v).unwrap(); }
+w.finalize().unwrap();
+
+let r = CompactReader::open("vectors.btcp").unwrap();
+let mut buf = vec![0u8; r.dims()];
+r.get_quantized_into(0, &amp;mut buf).unwrap(); // 1 seek, 0 alloc
+let deq = r.get_vector(0).unwrap();</pre>
+
+  <h3>Builder config</h3>
+  <pre>use bit_compact::{CompactConfig, QuantType, DistanceMetric};
+let cfg = CompactConfig::builder(128, QuantType::SQ8, DistanceMetric::Cosine)
+    .align_disk_blocks(true)
+    .version(1,0)
+    .build().unwrap();</pre>
+
+  <h3>Global & percentile calibration</h3>
+  <pre>let q_per_dim = Quantizer::calibrate(&amp;dataset).unwrap();          // tightest
+let q_global  = Quantizer::calibrate_global(&amp;dataset).unwrap();   // uniform range
+let q_pct     = Quantizer::calibrate_percentile(&amp;dataset, 1.0, 99.0).unwrap(); // outlier-robust
+let batch_q   = q_per_dim.quantize_batch(&amp;dataset).unwrap();</pre>
+
+  <h2 id="modules">Modules</h2>
+  <div class="grid">
+    <div class="card"><h3>errors</h3><p><code class="inline">CompactError</code>: <code class="inline">IoError</code>, <code class="inline">InvalidMagicBytes</code>, <code class="inline">DimensionMismatch</code>, <code class="inline">CorruptedFooter</code>, <code class="inline">QuantizationOverflow</code>, <code class="inline">ChecksumMismatch</code>.</p></div>
+    <div class="card"><h3>quant</h3><p><code class="inline">Quantizer::new / calibrate / quantize_vector / dequantize_vector / quantize_into / quantize_batch</code>. Formula <code class="inline">floor(((v-min)/(max-min))*255)</code>.</p></div>
+    <div class="card"><h3>config</h3><p><code class="inline">CompactConfig::builder</code>, <code class="inline">WriterConfig</code>, <code class="inline">ReaderConfig</code>. Validation <code class="inline">dims&lt;=65535</code>.</p></div>
+    <div class="card"><h3>aligned</h3><p><code class="inline">AlignedBuffer&lt;ALIGN&gt;</code>, <code class="inline">CacheAlignedBuffer</code> (64B), <code class="inline">BlockAlignedBuffer</code> (4096B), <code class="inline">StackBuf&lt;N&gt;</code> <code class="inline">repr(align(64))</code>.</p></div>
+    <div class="card"><h3>distance</h3><p><code class="inline">l2_squared</code>, <code class="inline">cosine_distance</code>, <code class="inline">dot</code>, 4-wide unrolled, <code class="inline">distance(metric)</code> dispatch.</p></div>
+    <div class="card"><h3>stats</h3><p><code class="inline">evaluate(q, data) -&gt; QuantizationReport {mse, mae, snr_db, ratio}</code>, <code class="inline">theoretical_max_error</code>.</p></div>
+    <div class="card"><h3>search</h3><p><code class="inline">brute_force_search</code>, <code class="inline">parallel_search</code> (thread::scope), <code class="inline">ScanIter</code>.</p></div>
+    <div class="card"><h3>header / sha</h3><p><code class="inline">Header::to_bytes/from_bytes</code> 32B, <code class="inline">Sha256</code> FIPS 180-4, no deps.</p></div>
+    <div class="card"><h3>storage</h3><p><code class="inline">CompactWriter</code> (append, finalize, 4096 pad) + <code class="inline">CompactReader</code> (1-seek, <code class="inline">Send+Sync Arc&lt;Mutex&lt;File&gt;&gt;</code>, <code class="inline">search</code>, <code class="inline">iter</code>).</p></div>
+  </div>
+
+  <h2 id="reader">Reader — zero-alloc pattern</h2>
+  <pre>let r = CompactReader::open("vectors.btcp").unwrap();
+let mut qbuf = vec![0u8; r.dims()];
+let mut fbuf = vec![0f32; r.dims()];
+r.get_quantized_into(42, &amp;mut qbuf).unwrap();                 // 1 seek
+r.get_dequantized_into(42, &amp;mut fbuf).unwrap();               // 1 seek
+let batch = r.get_batch(&amp;[0,1,2]).unwrap();                   // N seeks, N allocs
+let v: Vec&lt;f32&gt; = r.get_vector(42).unwrap();                   // alloc path
+
+// verified vs unverified open
+let r2 = CompactReader::open_unverified("vectors.btcp").unwrap();
+assert!(r.verify_checksum().is_ok());</pre>
+
+  <h2 id="search">Search</h2>
+  <pre>use bit_compact::{distance, search};
+
+let top3 = search::brute_force_search(&amp;r, &amp;query, 3, distance::l2_squared).unwrap();
+let top3p = search::parallel_search(&amp;r, &amp;query, 3, 4, distance::l2_squared).unwrap();
+let via_reader = r.search(&amp;query, 3).unwrap(); // uses header distance metric
+
+for hit in r.iter() {
+    let (id, vec) = hit.unwrap();
+    // custom logic
+}</pre>
+
+  <h2 id="stats">Stats</h2>
+  <pre>use bit_compact::stats;
+let report = stats::evaluate(&amp;q, &amp;dataset);
+println!("{}", report.summary());
+// dims=128 n=100 mse=0.000012 mae=0.0021 max_err=0.0078 snr=41.20dB ratio=4.00x (51200B -> 12800B)</pre>
+
+  <h2 id="perf">Performance</h2>
+  <div class="kv">
+    <div>Reduction</div><div>4× on payload (<code class="inline">f32 4B → u8 1B</code>), header 32B + meta <code class="inline">2*dims*4</code> + footer <code class="inline">count*8+32</code> overhead</div>
+    <div>Seeks</div><div>Exactly 1 <code class="inline">seek</code> per random read; use <code class="inline">get_quantized_into</code> for 0 heap alloc</div>
+    <div>Align</div><div>Header half cache line, <code class="inline">StackBuf&lt;N&gt; align(64)</code>, optional 4096B block pad before footer</div>
+    <div>Release</div><div><code class="inline">opt-level=3 lto=true codegen-units=1 panic=abort strip=symbols</code></div>
+  </div>
+  <pre>cargo run --release --example stats
+cargo run --release --bench quant_bench  # 10k x128 quantize + l2 benchmark</pre>
+
+  <h2 id="api">API reference</h2>
+  <p>Rustdoc is published via <code class="inline">cargo doc</code>. Local: <code class="inline">cargo doc --open</code>. Online docs will be on <code class="inline">docs.rs/bit-compact</code> after crates.io publish. Module docs are in <code class="inline">src/lib.rs</code> and each <code class="inline">src/*.rs</code>.</p>
+
+  <h2>Examples</h2>
+  <pre>cargo run --example basic   # write + read + batch + config
+cargo run --example search  # top-k + parallel + batch
+cargo run --example stats   # report + global/percentile</pre>
+
+  <h2>License</h2>
+  <p>MIT OR Apache-2.0 — see <code class="inline">LICENSE-MIT</code> and <code class="inline">LICENSE-APACHE</code> in the repo. Copyright 2026 TheElephantCoder.</p>
+
+  <hr>
+  <div class="footer">
+    <div>bit-compact 0.1.0 · <a href="https://github.com/TheElephantCoder/bit-compact">github.com/TheElephantCoder/bit-compact</a> · docs on <code class="inline">gh-pages</code> branch (not cloned with default <code class="inline">git clone</code>)</div>
+    <div style="margin-top:8px;">Build: <code class="inline">cargo test</code> (35 passed) · <code class="inline">cargo test --release</code> · Pages deployed from <code class="inline">gh-pages</code></div>
+  </div>
+</div>
+</body>
+</html>
