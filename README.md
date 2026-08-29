@@ -104,7 +104,7 @@ Builder pattern, validation (`dims <= 65535`), version, `align_disk_blocks`, `ve
 `Header` 32B BE exact, `validate_footer`, `Sha256` FIPS 180-4 pure std.
 
 ### CLI — `bitcompact` binary
-Zero-dep arg parser, subcommands `create`, `info`, `get`, `search`, `validate`, `stats`:
+Zero-dep arg parser, subcommands `create`, `info`, `get`, `search`, `validate`, `stats`, `serve`:
 
 ```bash
 cargo run --bin bitcompact -- create vectors.btcp --dims 8 --metric cosine --align
@@ -112,7 +112,12 @@ cargo run --bin bitcompact -- info vectors.btcp
 cargo run --bin bitcompact -- get vectors.btcp 42
 cargo run --bin bitcompact -- search vectors.btcp --query 0.1,0.2,0.3 --k 5
 cargo run --bin bitcompact -- validate vectors.btcp
+cargo run --bin bitcompact -- serve vectors.btcp --port 8080  # GUI at http://127.0.0.1:8080/
+cargo run --bin bitcompact -- serve --port 3000               # open any file via GUI
 ```
+
+### `server` — `bitcompact serve` GUI (zero-dep HTTP)
+`server::serve(path, host, port)` — `std::net::TcpListener` + thread-per-connection, endpoints `/` (GUI), `/api/info`, `/api/get?id=`, `/api/search?query=&k=`, `/api/validate`, `/api/stats`, `/api/health`. Single-page app with dark theme, file info, vector canvas chart, top-k search, validation.
 
 ## Examples
 
@@ -141,7 +146,8 @@ cargo run --release --bench quant_bench  # 10k x128 quantize + l2
 - `src/header.rs` — `Header` 32B BE
 - `src/sha.rs` — `Sha256` FIPS
 - `src/storage.rs` — `CompactWriter`, `CompactReader` (1-seek, `Send+Sync`)
-- `src/bin/bitcompact.rs` — CLI (`create`/`info`/`get`/`search`/`validate`/`stats`)
+- `src/server.rs` — `serve` HTTP + GUI (zero-dep, `TcpListener`, `thread::spawn`, JSON API)
+- `src/bin/bitcompact.rs` — CLI (`create`/`info`/`get`/`search`/`validate`/`stats`/`serve`)
 - `src/lib.rs` — re-exports + `VERSION_MAJOR/MINOR`
 
 ## Build

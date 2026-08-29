@@ -37,6 +37,7 @@ pub mod errors;
 pub mod header;
 pub mod quant;
 pub mod search;
+pub mod server;
 pub mod sha;
 pub mod stats;
 pub mod storage;

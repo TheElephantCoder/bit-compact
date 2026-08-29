@@ -15,6 +15,7 @@ Usage:
   bitcompact search <file> --query x,y,z --k K
   bitcompact validate <file>
   bitcompact stats  <file>
+  bitcompact serve [file] [--port PORT] [--host HOST]
 
 Examples:
   bitcompact create vectors.btcp --dims 128 --metric cosine --align
@@ -22,6 +23,8 @@ Examples:
   bitcompact get vectors.btcp 42
   bitcompact search vectors.btcp --query 0.1,0.2,0.3 --k 5
   bitcompact validate vectors.btcp
+  bitcompact serve vectors.btcp --port 8080
+  bitcompact serve --port 3000
 "#
     );
 }
@@ -48,6 +51,7 @@ fn main() {
         "search" => cmd_search(&args[2..]),
         "validate" => cmd_validate(&args[2..]),
         "stats" => cmd_stats(&args[2..]),
+        "serve" => cmd_serve(&args[2..]),
         "help" | "--help" | "-h" => {
             print_usage();
             Ok(())
@@ -192,5 +196,40 @@ fn cmd_stats(args: &[String]) -> Result<(), String> {
         let dq = r.quantizer().dequantize_vector(&qv).map_err(|e| e.to_string())?;
         println!("  sample id 0 quantized {:?} -> dequant {:?}", &qv[..qv.len().min(8)], &dq[..dq.len().min(4)]);
     }
+    Ok(())
+}
+
+fn cmd_serve(args: &[String]) -> Result<(), String> {
+    let mut file: Option<String> = None;
+    let mut port: u16 = 8080;
+    let mut host = "127.0.0.1".to_string();
+    let mut i = 0;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--port" => {
+                let p = args.get(i + 1).ok_or("--port needs value")?;
+                port = p.parse().map_err(|e: std::num::ParseIntError| e.to_string())?;
+                i += 2;
+            }
+            "--host" => {
+                host = args.get(i + 1).ok_or("--host needs value")?.clone();
+                i += 2;
+            }
+            s if s.starts_with("--") => return Err(format!("unknown flag {s}")),
+            other => {
+                if file.is_some() { return Err(format!("extra arg {other}")); }
+                file = Some(other.to_string());
+                i += 1;
+            }
+        }
+    }
+    let path = file.map(|f| std::path::PathBuf::from(f));
+    if let Some(p) = &path {
+        if !p.exists() {
+            // allow serving without existing file — GUI will show error until file created
+            eprintln!("warning: file {} does not exist yet", p.display());
+        }
+    }
+    bit_compact::server::serve(path, &host, port).map_err(|e| e.to_string())?;
     Ok(())
 }
