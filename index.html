@@ -21,13 +21,14 @@
 
 <div class="container hero">
   <h1>Scalar-quantized<br><span>embedding storage</span> in Rust.</h1>
-  <p>Zero-dependency, Big-Endian portable, 32-byte header, SHA-256 verified footer. 4× compression from <code class="inline">f32</code> to <code class="inline">u8</code> with exactly 1 disk seek and 0 heap allocations for quantized reads. <code class="inline">Send + Sync</code> reader, parallel search, LRU cache, batch ingestion, validation and transforms.</p>
+  <p>Zero-dependency, Big-Endian portable, 32-byte header, SHA-256 verified footer. 4× compression from <code class="inline">f32</code> to <code class="inline">u8</code> with exactly 1 disk seek and 0 heap allocations for quantized reads. <code class="inline">Send + Sync</code> reader, parallel search, LRU cache, batch ingestion, validation and transforms. Now with <code class="inline">bitcompact serve</code> GUI.</p>
   <div class="badges">
     <span class="badge">Rust 1.70+</span>
     <span class="badge">MIT OR Apache-2.0</span>
     <span class="badge">no deps = 0</span>
     <span class="badge">lto=true · codegen-units=1 · panic=abort</span>
     <span class="badge">46 tests passed</span>
+    <span class="badge">serve GUI</span>
   </div>
   <div class="cta">
     <a class="btn" href="https://github.com/TheElephantCoder/bit-compact">View on GitHub</a>
@@ -41,6 +42,7 @@
     <a href="#install">Install</a>
     <a href="#quickstart">Quick start</a>
     <a href="#modules">Modules</a>
+    <a href="#serve">Serve</a>
     <a href="#reader">Reader</a>
     <a href="#search">Search</a>
     <a href="#cache">Cache</a>
@@ -83,7 +85,8 @@ bit-compact = { git = "https://github.com/TheElephantCoder/bit-compact" }
   <pre>cargo add bit-compact
 cargo test
 cargo test --release   # lto=true codegen-units=1 panic=abort
-cargo run --bin bitcompact -- --help</pre>
+cargo run --bin bitcompact -- --help
+cargo run --bin bitcompact -- serve --help</pre>
 
   <h2 id="quickstart">Quick start</h2>
   <pre>use bit_compact::{Quantizer, QuantType, DistanceMetric, CompactWriter, CompactReader};
@@ -115,21 +118,30 @@ let batch_q   = q_per_dim.quantize_batch(&amp;dataset).unwrap();</pre>
 
   <h2 id="modules">Modules</h2>
   <div class="grid">
-    <div class="card"><h3>errors</h3><p><code class="inline">CompactError</code>: <code class="inline">IoError</code>, <code class="inline">InvalidMagicBytes</code>, <code class="inline">DimensionMismatch</code>, <code class="inline">CorruptedFooter</code>, <code class="inline">QuantizationOverflow</code>.</p></div>
-    <div class="card"><h3>quant</h3><p><code class="inline">Quantizer::new / calibrate / quantize_vector / dequantize_vector / quantize_into / quantize_batch</code>. Formula <code class="inline">floor(((v-min)/(max-min))*255)</code>.</p></div>
-    <div class="card"><h3>config</h3><p><code class="inline">CompactConfig::builder</code>, <code class="inline">WriterConfig</code>, <code class="inline">ReaderConfig</code>. Validation <code class="inline">dims&lt;=65535</code>.</p></div>
-    <div class="card"><h3>aligned</h3><p><code class="inline">AlignedBuffer&lt;ALIGN&gt;</code>, <code class="inline">CacheAlignedBuffer</code> (64B), <code class="inline">BlockAlignedBuffer</code> (4096B), <code class="inline">StackBuf&lt;N&gt;</code>.</p></div>
-    <div class="card"><h3>distance</h3><p><code class="inline">l2_squared</code>, <code class="inline">cosine_distance</code>, <code class="inline">dot</code>, 4-wide unrolled, <code class="inline">distance(metric)</code> dispatch.</p></div>
+    <div class="card"><h3>errors</h3><p><code class="inline">CompactError</code>: <code class="inline">IoError</code>, <code class="inline">InvalidMagicBytes</code>, <code class="inline">DimensionMismatch</code>, <code class="inline">CorruptedFooter</code>.</p></div>
+    <div class="card"><h3>quant</h3><p><code class="inline">Quantizer::new / calibrate / quantize_vector / dequantize_vector / quantize_into / quantize_batch</code>.</p></div>
+    <div class="card"><h3>config</h3><p><code class="inline">CompactConfig::builder</code>, <code class="inline">WriterConfig</code>, <code class="inline">ReaderConfig</code>.</p></div>
+    <div class="card"><h3>aligned</h3><p><code class="inline">AlignedBuffer&lt;ALIGN&gt;</code>, <code class="inline">CacheAlignedBuffer</code> (64B), <code class="inline">BlockAlignedBuffer</code> (4096B).</p></div>
+    <div class="card"><h3>distance</h3><p><code class="inline">l2_squared</code>, <code class="inline">cosine_distance</code>, <code class="inline">dot</code>, 4-wide unrolled.</p></div>
     <div class="card"><h3>stats</h3><p><code class="inline">evaluate(q, data) -&gt; QuantizationReport {mse, mae, snr_db, ratio}</code>.</p></div>
-    <div class="card"><h3>search</h3><p><code class="inline">brute_force_search</code>, <code class="inline">parallel_search</code> (thread::scope), <code class="inline">ScanIter</code>.</p></div>
-    <div class="card"><h3>cache</h3><p><code class="inline">LruCache</code> + <code class="inline">CachedReader::new(reader, cap)</code> — hot-vector LRU, <code class="inline">hit_rate()</code>, thread-shared.</p></div>
-    <div class="card"><h3>batch</h3><p><code class="inline">BatchWriter</code>, <code class="inline">parallel_calibrate</code>, <code class="inline">ChunkedReader</code>, <code class="inline">parallel_batch_search</code>.</p></div>
-    <div class="card"><h3>validate</h3><p><code class="inline">validate(path) -&gt; ValidationReport</code>, <code class="inline">quick_check</code>, row-ids monotonic, checksum.</p></div>
-    <div class="card"><h3>transform</h3><p><code class="inline">Normalizer</code>, <code class="inline">Centering</code>, <code class="inline">Standardizer</code>, <code class="inline">Chain</code>, <code class="inline">Transform</code> trait.</p></div>
-    <div class="card"><h3>header / sha</h3><p><code class="inline">Header::to_bytes/from_bytes</code> 32B, <code class="inline">Sha256</code> FIPS 180-4, no deps.</p></div>
-    <div class="card"><h3>storage</h3><p><code class="inline">CompactWriter</code> + <code class="inline">CompactReader</code> (1-seek, <code class="inline">Send+Sync</code>), <code class="inline">search</code>, <code class="inline">iter</code>, <code class="inline">get_batch</code>.</p></div>
-    <div class="card"><h3>CLI</h3><p><code class="inline">bitcompact create/info/get/search/validate/stats</code> — zero-dep arg parser in <code class="inline">src/bin/bitcompact.rs</code>.</p></div>
+    <div class="card"><h3>search</h3><p><code class="inline">brute_force_search</code>, <code class="inline">parallel_search</code>, <code class="inline">ScanIter</code>.</p></div>
+    <div class="card"><h3>cache</h3><p><code class="inline">LruCache</code> + <code class="inline">CachedReader::new(reader, cap)</code> — hot-vector LRU.</p></div>
+    <div class="card"><h3>batch</h3><p><code class="inline">BatchWriter</code>, <code class="inline">parallel_calibrate</code>, <code class="inline">ChunkedReader</code>.</p></div>
+    <div class="card"><h3>validate</h3><p><code class="inline">validate(path) -&gt; ValidationReport</code>, <code class="inline">quick_check</code>.</p></div>
+    <div class="card"><h3>transform</h3><p><code class="inline">Normalizer</code>, <code class="inline">Centering</code>, <code class="inline">Standardizer</code>, <code class="inline">Chain</code>.</p></div>
+    <div class="card"><h3>header / sha</h3><p><code class="inline">Header::to_bytes/from_bytes</code> 32B, <code class="inline">Sha256</code> FIPS 180-4.</p></div>
+    <div class="card"><h3>storage</h3><p><code class="inline">CompactWriter</code> + <code class="inline">CompactReader</code> (1-seek, <code class="inline">Send+Sync</code>).</p></div>
+    <div class="card"><h3>server</h3><p><code class="inline">server::serve(path, host, port)</code> — zero-dep HTTP, 5 JSON APIs, GUI.</p></div>
+    <div class="card"><h3>CLI</h3><p><code class="inline">bitcompact create/info/get/search/validate/stats/serve</code> — zero-dep arg parser.</p></div>
   </div>
+
+  <h2 id="serve">Serve — GUI</h2>
+  <pre>cargo run --bin bitcompact -- serve vectors.btcp --port 8080
+# → http://127.0.0.1:8080/  (dark theme, file info, vector canvas, top-k search, validate)
+cargo run --bin bitcompact -- serve --port 3000  # no file, use ?file= in GUI
+
+Endpoints: /, /style.css, /api/info, /api/get?id=, /api/search?query=&k=, /api/validate, /api/stats, /api/health</pre>
+  <p class="muted">Zero-dependency <code class="inline">TcpListener</code> + <code class="inline">thread::spawn</code> per connection, JSON without serde, single-page app with canvas chart. See <code class="inline">src/server.rs:1</code> and <code class="inline">src/bin/bitcompact.rs:195</code>.</p>
 
   <h2 id="reader">Reader — zero-alloc pattern</h2>
   <pre>let r = CompactReader::open("vectors.btcp").unwrap();
@@ -140,7 +152,11 @@ r.get_dequantized_into(42, &amp;mut fbuf).unwrap();               // 1 seek
 let batch = r.get_batch(&amp;[0,1,2]).unwrap();                   // N seeks
 let v: Vec&lt;f32&gt; = r.get_vector(42).unwrap();                   // alloc path
 let r2 = CompactReader::open_unverified("vectors.btcp").unwrap();
-assert!(r.verify_checksum().is_ok());</pre>
+assert!(r.verify_checksum().is_ok());
+
+// cached hot vectors
+let cr = bit_compact::CachedReader::new(r, 128);
+let v = cr.get(42).unwrap(); // hit → 0 seek after first</pre>
 
   <h2 id="search">Search</h2>
   <pre>use bit_compact::{distance, search};
@@ -166,18 +182,13 @@ println!("hit rate {:.2}", cr.hit_rate());</pre>
 let q = parallel_calibrate(&amp;dataset, 4).unwrap();
 let mut bw = BatchWriter::new(1024);
 for v in dataset { bw.push(v); if bw.should_flush() { bw.flush_to(&amp;mut writer).unwrap(); } }
-bw.finish(&amp;mut writer).unwrap();
-
-for batch in bit_compact::batch::ChunkedReader::new(&amp;reader, 64) {
-    let b = batch.unwrap(); // Vec&lt;Vec&lt;f32&gt;&gt; len 64
-}</pre>
+bw.finish(&amp;mut writer).unwrap();</pre>
 
   <h2 id="validate">Validation</h2>
   <pre>use bit_compact::validate;
 let rep = validate::validate("vectors.btcp").unwrap();
 println!("{}", rep.summary());
-assert!(rep.checksum_valid &amp;&amp; rep.row_ids_monotonic);
-assert!(validate::quick_check("vectors.btcp").unwrap());</pre>
+assert!(rep.checksum_valid &amp;&amp; rep.row_ids_monotonic);</pre>
 
   <h2 id="transform">Transforms</h2>
   <pre>use bit_compact::{Normalizer, Centering, Standardizer, Transform};
@@ -185,14 +196,6 @@ let cent = Centering::from_data(&amp;dataset).unwrap();
 let n = Normalizer::new(128);
 let chain = bit_compact::Chain::new(cent, n).unwrap();
 let out = chain.transform_vector(&amp;query).unwrap();</pre>
-
-  <h2 id="cli">CLI</h2>
-  <pre>cargo run --bin bitcompact -- create vectors.btcp --dims 128 --metric cosine --align
-cargo run --bin bitcompact -- info vectors.btcp
-cargo run --bin bitcompact -- get vectors.btcp 42
-cargo run --bin bitcompact -- search vectors.btcp --query 0.1,0.2,0.3 --k 5
-cargo run --bin bitcompact -- validate vectors.btcp
-cargo run --bin bitcompact -- stats vectors.btcp</pre>
 
   <h2 id="stats">Stats</h2>
   <pre>use bit_compact::stats;
@@ -209,7 +212,7 @@ println!("{}", report.summary());
   </div>
   <pre>cargo run --release --example cache
 cargo run --release --example transform
-cargo run --release --bench quant_bench  # 10k x128 quantize + l2</pre>
+cargo run --bin bitcompact -- serve --help</pre>
 
   <h2 id="api">API reference</h2>
   <p>Rustdoc: <code class="inline">cargo doc --open</code> → <code class="inline">target/doc/bit_compact</code>. Online on <code class="inline">docs.rs/bit-compact</code> after publish. Module docs in <code class="inline">src/lib.rs</code> and each <code class="inline">src/*.rs</code>.</p>
@@ -220,15 +223,16 @@ cargo run --example search    # top-k + parallel
 cargo run --example stats     # report + global/percentile
 cargo run --example cache     # LRU hit rate
 cargo run --example transform # center/standardize/chain
-cargo run --bin bitcompact -- --help</pre>
+cargo run --bin bitcompact -- --help
+cargo run --bin bitcompact -- serve vectors.btcp --port 8080  # GUI at http://127.0.0.1:8080/</pre>
 
   <h2>License</h2>
   <p>MIT OR Apache-2.0 — see <code class="inline">LICENSE-MIT</code> and <code class="inline">LICENSE-APACHE</code>. Copyright 2026 TheElephantCoder.</p>
 
   <hr>
   <div class="footer">
-    <div>bit-compact 0.1.0 · <a href="https://github.com/TheElephantCoder/bit-compact">github.com/TheElephantCoder/bit-compact</a> · docs on <code class="inline">gh-pages</code> branch (not cloned with default <code class="inline">git clone</code>)</div>
-    <div style="margin-top:8px;">Build: <code class="inline">cargo test</code> (46 passed) · <code class="inline">cargo test --release</code> · Pages from <code class="inline">gh-pages</code> (root)</div>
+    <div>bit-compact 0.1.0 · <a href="https://github.com/TheElephantCoder/bit-compact">github.com/TheElephantCoder/bit-compact</a> · docs on <code class="inline">gh-pages</code> branch (not cloned with default <code class="inline">git clone</code>) — auto-synced 2 mins after each <code class="inline">main</code> push</div>
+    <div style="margin-top:8px;">Build: <code class="inline">cargo test</code> (46 passed) · <code class="inline">cargo test --release</code> · Pages from <code class="inline">gh-pages</code> (root) · serve GUI at <code class="inline">/api/*</code></div>
   </div>
 </div>
 </body>
