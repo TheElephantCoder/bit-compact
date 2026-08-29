@@ -82,16 +82,41 @@ Builder pattern, validation (`dims <= 65535`), version, `align_disk_blocks`, `ve
 ### `storage` — Writer/Reader engine
 `CompactWriter::{create, create_with_config, create_with_version, append, append_quantized, append_batch, finalize, finalize_with_padding, estimated_file_size}`, `CompactReader::{open, open_unverified, open_with_config, get_quantized_into, get_dequantized_into, get_vector, get_batch, search, search_parallel, iter, scan_quantized, verify_checksum, read_header}`. `Send + Sync` via `Arc<Mutex<File>>`.
 
+### `cache` — Hot-vector LRU
+`LruCache::new(capacity)`, `CachedReader::new(reader, cap)` — `get(id)` hits cache or does 1-seek then inserts, `hit_rate()`, `Arc`-shared for threads, evicts LRU on `capacity`.
+
+### `batch` — Parallel ingestion
+`BatchWriter` (buffer + `flush_to`), `parallel_calibrate(data, threads)`, `ChunkedReader::new(reader, batch_size)` iterator of `Vec<Vec<f32>>`, `parallel_batch_search` for many queries.
+
+### `validate` — Integrity
+`validate(path) -> ValidationReport {header, checksum_valid, row_ids_monotonic, metadata_finite, warnings}`, `quick_check(path)` (header+footer bounds only), summary `is_valid()`.
+
+### `transform` — Vector pre-processing
+`Transform` trait (`Identity`, `Normalizer`, `Centering::from_data`, `Standardizer::from_data`, `Chain::new`), `transform_dataset`.
+
 ### `header` / `sha`
 `Header` 32B BE exact, `validate_footer`, `Sha256` FIPS 180-4 pure std.
+
+### CLI — `bitcompact` binary
+Zero-dep arg parser, subcommands `create`, `info`, `get`, `search`, `validate`, `stats`:
+
+```bash
+cargo run --bin bitcompact -- create vectors.btcp --dims 8 --metric cosine --align
+cargo run --bin bitcompact -- info vectors.btcp
+cargo run --bin bitcompact -- get vectors.btcp 42
+cargo run --bin bitcompact -- search vectors.btcp --query 0.1,0.2,0.3 --k 5
+cargo run --bin bitcompact -- validate vectors.btcp
+```
 
 ## Examples
 
 ```bash
-cargo run --example basic   # write + 1-seek read + batch + config
-cargo run --example search  # top-k, parallel, cosine, batch, iter
-cargo run --example stats   # report, global/percentile, aligned buf
-cargo run --release --bench quant_bench  # micro bench (10k x128)
+cargo run --example basic     # write + 1-seek read + batch + config
+cargo run --example search    # top-k + parallel + batch + iter
+cargo run --example stats     # report + global/percentile + aligned buf
+cargo run --example cache     # LRU cache + hit rate
+cargo run --example transform # center/standardize/normalize + chain
+cargo run --release --bench quant_bench  # 10k x128 quantize + l2
 ```
 
 ## Crate Layout
@@ -103,9 +128,14 @@ cargo run --release --bench quant_bench  # micro bench (10k x128)
 - `src/distance.rs` — L2/cosine/IP, 4-wide loops, batch
 - `src/stats.rs` — `QuantizationReport`, `evaluate`, `snr_db`, `mse`
 - `src/search.rs` — `brute_force_search`, `parallel_search`, `ScanIter`
+- `src/cache.rs` — `LruCache`, `CachedReader` (hot-vector)
+- `src/batch.rs` — `BatchWriter`, `ChunkedReader`, `parallel_calibrate`
+- `src/validate.rs` — `validate`, `ValidationReport`, `quick_check`
+- `src/transform.rs` — `Transform`, `Normalizer`, `Centering`, `Standardizer`, `Chain`
 - `src/header.rs` — `Header` 32B BE
 - `src/sha.rs` — `Sha256` FIPS
 - `src/storage.rs` — `CompactWriter`, `CompactReader` (1-seek, `Send+Sync`)
+- `src/bin/bitcompact.rs` — CLI (`create`/`info`/`get`/`search`/`validate`/`stats`)
 - `src/lib.rs` — re-exports + `VERSION_MAJOR/MINOR`
 
 ## Build

@@ -16,6 +16,10 @@ name = "bit_compact"
 path = "src/lib.rs"
 crate-type = ["rlib", "cdylib"]
 
+[[bin]]
+name = "bitcompact"
+path = "src/bin/bitcompact.rs"
+
 [dependencies]
 
 [profile.release]

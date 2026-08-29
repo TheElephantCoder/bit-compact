@@ -29,6 +29,8 @@
 #![allow(missing_docs)]
 
 pub mod aligned;
+pub mod batch;
+pub mod cache;
 pub mod config;
 pub mod distance;
 pub mod errors;
@@ -38,9 +40,13 @@ pub mod search;
 pub mod sha;
 pub mod stats;
 pub mod storage;
+pub mod transform;
+pub mod validate;
 
 // Re-exports for ergonomic crate root
 pub use aligned::{AlignedBuffer, BlockAlignedBuffer, CacheAlignedBuffer, StackBuf, CACHE_LINE, DISK_BLOCK};
+pub use batch::{BatchWriter, ChunkedReader, parallel_batch_search, parallel_calibrate};
+pub use cache::{CachedReader, LruCache};
 pub use config::{CompactConfig, ConfigBuilder, ReaderConfig, WriterConfig};
 pub use distance::{cosine_distance, cosine_similarity, dot, inner_product_distance, l2, l2_squared};
 pub use errors::{CompactError, Result};
@@ -50,6 +56,8 @@ pub use search::{SearchResult, brute_force_search, parallel_search};
 pub use sha::{Sha256, sha256};
 pub use stats::{QuantizationReport, evaluate as evaluate_quantization};
 pub use storage::{CompactReader, CompactWriter, CHECKSUM_SIZE};
+pub use transform::{transform_dataset, Centering, Chain, Identity, Normalizer, Standardizer, Transform};
+pub use validate::{ValidationReport, quick_check, validate};
 
 // Crate version constants mirroring header version fields
 /// Default major version written to new files.
