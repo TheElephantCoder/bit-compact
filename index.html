@@ -27,8 +27,8 @@
     <span class="badge">MIT OR Apache-2.0</span>
     <span class="badge">no deps = 0</span>
     <span class="badge">lto=true · codegen-units=1 · panic=abort</span>
-    <span class="badge">46 tests passed</span>
-    <span class="badge">serve GUI</span>
+    <span class="badge">53 tests passed</span>
+    <span class="badge">serve GUI · dataset ops metrics</span>
   </div>
   <div class="cta">
     <a class="btn" href="https://github.com/TheElephantCoder/bit-compact">View on GitHub</a>
@@ -129,19 +129,26 @@ let batch_q   = q_per_dim.quantize_batch(&amp;dataset).unwrap();</pre>
     <div class="card"><h3>batch</h3><p><code class="inline">BatchWriter</code>, <code class="inline">parallel_calibrate</code>, <code class="inline">ChunkedReader</code>.</p></div>
     <div class="card"><h3>validate</h3><p><code class="inline">validate(path) -&gt; ValidationReport</code>, <code class="inline">quick_check</code>.</p></div>
     <div class="card"><h3>transform</h3><p><code class="inline">Normalizer</code>, <code class="inline">Centering</code>, <code class="inline">Standardizer</code>, <code class="inline">Chain</code>.</p></div>
+    <div class="card"><h3>dataset</h3><p><code class="inline">Dataset::synthetic_uniform/clustered</code>, <code class="inline">from_json_array</code>, deterministic xorshift.</p></div>
+    <div class="card"><h3>ops</h3><p><code class="inline">vec_add/sub/scale</code>, <code class="inline">l2_norm</code>, <code class="inline">vec_mean</code>, 4-wide.</p></div>
+    <div class="card"><h3>metrics</h3><p><code class="inline">recall_precision_at_k</code>, <code class="inline">mrr</code>, <code class="inline">evaluate_search</code>.</p></div>
     <div class="card"><h3>header / sha</h3><p><code class="inline">Header::to_bytes/from_bytes</code> 32B, <code class="inline">Sha256</code> FIPS 180-4.</p></div>
-    <div class="card"><h3>storage</h3><p><code class="inline">CompactWriter</code> + <code class="inline">CompactReader</code> (1-seek, <code class="inline">Send+Sync</code>).</p></div>
-    <div class="card"><h3>server</h3><p><code class="inline">server::serve(path, host, port)</code> — zero-dep HTTP, 5 JSON APIs, GUI.</p></div>
+    <div class="card"><h3>storage</h3><p><code class="inline">CompactWriter</code> + <code class="inline">CompactReader</code> (1-seek, <code class="inline">Send+Sync</code>, <code class="inline">get_batch</code>).</p></div>
+    <div class="card"><h3>server</h3><p><code class="inline">server::serve</code> — zero-dep HTTP, 10 APIs, polished GUI (sidebar tabs, canvas charts, toast).</p></div>
     <div class="card"><h3>CLI</h3><p><code class="inline">bitcompact create/info/get/search/validate/stats/serve</code> — zero-dep arg parser.</p></div>
   </div>
 
-  <h2 id="serve">Serve — GUI</h2>
+  <h2 id="serve">Serve — GUI (really good)</h2>
   <pre>cargo run --bin bitcompact -- serve vectors.btcp --port 8080
-# → http://127.0.0.1:8080/  (dark theme, file info, vector canvas, top-k search, validate)
-cargo run --bin bitcompact -- serve --port 3000  # no file, use ?file= in GUI
+# → http://127.0.0.1:8080/  (polished SPA: sidebar tabs, dark theme, canvas charts, toast)
+cargo run --bin bitcompact -- serve --port 3000  # no file, use ?file=path in GUI
 
-Endpoints: /, /style.css, /api/info, /api/get?id=, /api/search?query=&k=, /api/validate, /api/stats, /api/health</pre>
-  <p class="muted">Zero-dependency <code class="inline">TcpListener</code> + <code class="inline">thread::spawn</code> per connection, JSON without serde, single-page app with canvas chart. See <code class="inline">src/server.rs:1</code> and <code class="inline">src/bin/bitcompact.rs:195</code>.</p>
+Endpoints (10): /, /style.css, /api/info, /api/get?id=, /api/batch?start=&count=, /api/search?query=&k=, /api/quantize?vector=, /api/distance?a=&b=&metric=, /api/transform?vector=&type=, /api/dataset?dims=&count=&type=, /api/validate, /api/stats, /api/health</pre>
+  <p class="muted">Zero-dependency <code class="inline">TcpListener</code> + <code class="inline">thread::spawn</code> per connection, manual JSON, no serde. GUI: 9 tabs (Dashboard, Vectors, Search, Quantize, Distance, Transform, Dataset, Validate, Create), paginated vector table, batch view, bar/line canvas charts, file switcher without reload, toast, responsive grid. See <code class="inline">src/server.rs:1</code> (826 lines) and <code class="inline">src/bin/bitcompact.rs:195</code>.</p>
+  <div class="grid" style="margin-top:12px">
+    <div class="card"><h3>Try it</h3><p><code class="inline">/api/quantize?vector=0,1,2&amp;file=/tmp/a.btcp</code> → quantized + dequant + mse<br><code class="inline">/api/distance?a=0,1&amp;b=1,0&amp;metric=cosine</code> → 1.0<br><code class="inline">/api/dataset?dims=4&amp;count=5&amp;type=clustered</code> → synthetic JSON</p></div>
+    <div class="card"><h3>Why polished</h3><p>Hand-tuned CSS variables, sticky header/sidebar, 700×140 canvas, keyboard prev/next, local file param, no external JS, <code class="inline">r##&quot;</code> raw strings to allow <code class="inline">href=&quot;#&quot;</code> safely.</p></div>
+  </div>
 
   <h2 id="reader">Reader — zero-alloc pattern</h2>
   <pre>let r = CompactReader::open("vectors.btcp").unwrap();
@@ -232,7 +239,7 @@ cargo run --bin bitcompact -- serve vectors.btcp --port 8080  # GUI at http://12
   <hr>
   <div class="footer">
     <div>bit-compact 0.1.0 · <a href="https://github.com/TheElephantCoder/bit-compact">github.com/TheElephantCoder/bit-compact</a> · docs on <code class="inline">gh-pages</code> branch (not cloned with default <code class="inline">git clone</code>) — auto-synced 2 mins after each <code class="inline">main</code> push</div>
-    <div style="margin-top:8px;">Build: <code class="inline">cargo test</code> (46 passed) · <code class="inline">cargo test --release</code> · Pages from <code class="inline">gh-pages</code> (root) · serve GUI at <code class="inline">/api/*</code></div>
+    <div style="margin-top:8px;">Build: <code class="inline">cargo test</code> (53 passed) · <code class="inline">cargo test --release</code> · Pages from <code class="inline">gh-pages</code> (root) · serve GUI · dataset ops metrics at <code class="inline">/api/*</code></div>
   </div>
 </div>
 </body>
