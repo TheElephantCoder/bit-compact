@@ -185,7 +185,7 @@ impl std::fmt::Debug for CachedReader {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::quant::{QuantType, Quantizer, DistanceMetric};
+    use crate::quant::{DistanceMetric, QuantType, Quantizer};
     use crate::storage::CompactWriter;
     use std::fs;
 
@@ -195,8 +195,11 @@ mod tests {
         let mut p = std::env::temp_dir();
         p.push(format!("cache_test_{}.btcp", std::process::id()));
         let _ = fs::remove_file(&p);
-        let mut w = CompactWriter::create(&p, q, QuantType::SQ8, DistanceMetric::L2).expect("create");
-        for v in &data { w.append(v).expect("append"); }
+        let mut w =
+            CompactWriter::create(&p, q, QuantType::SQ8, DistanceMetric::L2).expect("create");
+        for v in &data {
+            w.append(v).expect("append");
+        }
         w.finalize().expect("fin");
         let r = CompactReader::open(&p).expect("open");
         (r, p)

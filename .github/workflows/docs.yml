@@ -32,7 +32,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git fetch origin gh-pages:gh-pages || echo "no gh-pages yet"
+          git fetch origin gh-pages || echo "no gh-pages yet"
           # generate docs content from main
           # we rebuild index.html section counts from README and cargo metadata
           echo "generating docs snapshot"

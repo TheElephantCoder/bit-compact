@@ -69,7 +69,9 @@ pub fn parallel_calibrate(vectors: &[Vec<f32>], num_threads: usize) -> Result<Qu
     }
     let dims = vectors[0].len();
     let threads = if num_threads == 0 {
-        std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4)
+        std::thread::available_parallelism()
+            .map(|n| n.get())
+            .unwrap_or(4)
     } else {
         num_threads
     }
@@ -95,8 +97,12 @@ pub fn parallel_calibrate(vectors: &[Vec<f32>], num_threads: usize) -> Result<Qu
                 let mut maxs = vec![f32::NEG_INFINITY; dims];
                 for v in slice {
                     for (d, &val) in v.iter().enumerate() {
-                        if val < mins[d] { mins[d] = val; }
-                        if val > maxs[d] { maxs[d] = val; }
+                        if val < mins[d] {
+                            mins[d] = val;
+                        }
+                        if val > maxs[d] {
+                            maxs[d] = val;
+                        }
                     }
                 }
                 (mins, maxs)
@@ -105,8 +111,12 @@ pub fn parallel_calibrate(vectors: &[Vec<f32>], num_threads: usize) -> Result<Qu
         for h in handles {
             if let Ok((mins, maxs)) = h.join() {
                 for d in 0..dims {
-                    if mins[d] < global_min[d] { global_min[d] = mins[d]; }
-                    if maxs[d] > global_max[d] { global_max[d] = maxs[d]; }
+                    if mins[d] < global_min[d] {
+                        global_min[d] = mins[d];
+                    }
+                    if maxs[d] > global_max[d] {
+                        global_max[d] = maxs[d];
+                    }
                 }
             }
         }
@@ -153,7 +163,11 @@ impl<'a> Iterator for ChunkedReader<'a> {
             if let Err(e) = self.reader.get_quantized_into(self.next, &mut self.q_buf) {
                 return Some(Err(e));
             }
-            if let Err(e) = self.reader.quantizer().dequantize_into(&self.q_buf, &mut self.f_buf) {
+            if let Err(e) = self
+                .reader
+                .quantizer()
+                .dequantize_into(&self.q_buf, &mut self.f_buf)
+            {
                 return Some(Err(e));
             }
             batch.push(self.f_buf.clone());
@@ -174,9 +188,14 @@ pub fn parallel_batch_search(
         return Ok(Vec::new());
     }
     let threads = if num_threads == 0 {
-        std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4)
-    } else { num_threads }
-    .min(queries.len()).max(1);
+        std::thread::available_parallelism()
+            .map(|n| n.get())
+            .unwrap_or(4)
+    } else {
+        num_threads
+    }
+    .min(queries.len())
+    .max(1);
 
     let chunk = (queries.len() + threads - 1) / threads;
     let mut out: Vec<Vec<crate::search::SearchResult>> = Vec::with_capacity(queries.len());
@@ -188,7 +207,9 @@ pub fn parallel_batch_search(
         for t in 0..threads {
             let start = t * chunk;
             let end = (start + chunk).min(queries.len());
-            if start >= end { continue; }
+            if start >= end {
+                continue;
+            }
             let slice = &queries[start..end];
             let r = reader;
             handles.push(s.spawn(move || {
@@ -216,7 +237,7 @@ pub fn parallel_batch_search(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::quant::{Quantizer, QuantType, DistanceMetric};
+    use crate::quant::{DistanceMetric, QuantType, Quantizer};
 
     #[test]
     fn batch_writer_flush() {
@@ -225,7 +246,8 @@ mod tests {
         let mut p = std::env::temp_dir();
         p.push(format!("batch_test_{}.btcp", std::process::id()));
         let _ = std::fs::remove_file(&p);
-        let mut w = CompactWriter::create(&p, q, QuantType::SQ8, DistanceMetric::L2).expect("create");
+        let mut w =
+            CompactWriter::create(&p, q, QuantType::SQ8, DistanceMetric::L2).expect("create");
         let mut bw = BatchWriter::new(2);
         for v in data.clone() {
             bw.push(v);
@@ -251,13 +273,21 @@ mod tests {
 
     #[test]
     fn chunked_reader() {
-        let data = vec![vec![0.0, 0.0], vec![1.0, 1.0], vec![2.0, 2.0], vec![3.0, 3.0]];
+        let data = vec![
+            vec![0.0, 0.0],
+            vec![1.0, 1.0],
+            vec![2.0, 2.0],
+            vec![3.0, 3.0],
+        ];
         let q = Quantizer::calibrate(&data).expect("cal");
         let mut p = std::env::temp_dir();
         p.push(format!("chunk_test_{}.btcp", std::process::id()));
         let _ = std::fs::remove_file(&p);
-        let mut w = CompactWriter::create(&p, q, QuantType::SQ8, DistanceMetric::L2).expect("create");
-        for v in &data { w.append(v).expect("append"); }
+        let mut w =
+            CompactWriter::create(&p, q, QuantType::SQ8, DistanceMetric::L2).expect("create");
+        for v in &data {
+            w.append(v).expect("append");
+        }
         w.finalize().expect("fin");
         let r = CompactReader::open(&p).expect("open");
         let mut iter = ChunkedReader::new(&r, 2);

@@ -12,12 +12,16 @@ pub struct SearchMetrics {
 
 /// Compute recall@k and precision@k given ground truth ids and predicted ids (ordered).
 pub fn recall_precision_at_k(truth: &[u64], predicted: &[u64], k: usize) -> (f64, f64) {
-    if k == 0 { return (0.0, 0.0); }
+    if k == 0 {
+        return (0.0, 0.0);
+    }
     let k = k.min(predicted.len()).min(truth.len().max(1));
     let truth_set: std::collections::HashSet<u64> = truth.iter().take(k).cloned().collect();
     let mut hits = 0;
     for &id in predicted.iter().take(k) {
-        if truth_set.contains(&id) { hits += 1; }
+        if truth_set.contains(&id) {
+            hits += 1;
+        }
     }
     let recall = hits as f64 / k as f64;
     let precision = hits as f64 / k as f64;
@@ -37,9 +41,18 @@ pub fn mrr(truth_first: u64, predicted: &[u64]) -> f64 {
 
 /// Evaluate quantized search vs brute-force exact search on the same dataset (using reader's dequantized vectors as ground truth).
 /// Returns average recall@k over `queries`.
-pub fn evaluate_search(reader: &CompactReader, queries: &[Vec<f32>], k: usize, _metric: crate::quant::DistanceMetric) -> Result<SearchMetrics> {
+pub fn evaluate_search(
+    reader: &CompactReader,
+    queries: &[Vec<f32>],
+    k: usize,
+    _metric: crate::quant::DistanceMetric,
+) -> Result<SearchMetrics> {
     if queries.is_empty() {
-        return Ok(SearchMetrics { recall_at_k: 0.0, precision_at_k: 0.0, mrr: 0.0 });
+        return Ok(SearchMetrics {
+            recall_at_k: 0.0,
+            precision_at_k: 0.0,
+            mrr: 0.0,
+        });
     }
     let mut total_recall = 0.0;
     let mut total_mrr = 0.0;
@@ -70,15 +83,15 @@ mod tests {
     use super::*;
     #[test]
     fn recall_simple() {
-        let truth = vec![1,2,3];
-        let pred = vec![2,3,4];
-        let (r,p) = recall_precision_at_k(&truth, &pred, 3);
+        let truth = vec![1, 2, 3];
+        let pred = vec![2, 3, 4];
+        let (r, p) = recall_precision_at_k(&truth, &pred, 3);
         assert!((r - 0.666).abs() < 0.01);
         assert!((p - 0.666).abs() < 0.01);
     }
     #[test]
     fn mrr_test() {
-        assert!((mrr(2, &[1,2,3]) - 0.5).abs() < 1e-6);
-        assert!((mrr(5, &[1,2,3]) - 0.0).abs() < 1e-6);
+        assert!((mrr(2, &[1, 2, 3]) - 0.5).abs() < 1e-6);
+        assert!((mrr(5, &[1, 2, 3]) - 0.0).abs() < 1e-6);
     }
 }

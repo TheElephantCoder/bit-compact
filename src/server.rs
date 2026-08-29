@@ -31,7 +31,9 @@ fn parse_query(query: Option<&str>) -> HashMap<String, String> {
     let mut map = HashMap::new();
     if let Some(q) = query {
         for pair in q.split('&') {
-            if pair.is_empty() { continue; }
+            if pair.is_empty() {
+                continue;
+            }
             let mut split = pair.splitn(2, '=');
             let k = split.next().unwrap_or("");
             let v = split.next().unwrap_or("");
@@ -80,18 +82,34 @@ fn write_response(stream: &mut TcpStream, status: &str, content_type: &str, body
 }
 
 fn write_json(stream: &mut TcpStream, status: &str, body: &str) {
-    write_response(stream, status, "application/json; charset=utf-8", body.as_bytes());
+    write_response(
+        stream,
+        status,
+        "application/json; charset=utf-8",
+        body.as_bytes(),
+    );
 }
 
 fn open_reader(path: &Path) -> Result<CompactReader, String> {
     CompactReader::open(path).map_err(|e| e.to_string())
 }
 
-fn handle_api_info(params: &HashMap<String, String>, default_file: Option<&Path>) -> (String, String) {
-    let file = params.get("file").map(|s| PathBuf::from(s)).or_else(|| default_file.map(|p| p.to_path_buf()));
+fn handle_api_info(
+    params: &HashMap<String, String>,
+    default_file: Option<&Path>,
+) -> (String, String) {
+    let file = params
+        .get("file")
+        .map(|s| PathBuf::from(s))
+        .or_else(|| default_file.map(|p| p.to_path_buf()));
     let p = match file {
         Some(f) => f,
-        None => return ("400 Bad Request".into(), json_error("no file specified; start server with `bitcompact serve <file>` or use ?file=path")),
+        None => return (
+            "400 Bad Request".into(),
+            json_error(
+                "no file specified; start server with `bitcompact serve <file>` or use ?file=path",
+            ),
+        ),
     };
     match open_reader(&p) {
         Ok(r) => {
@@ -115,8 +133,14 @@ fn handle_api_info(params: &HashMap<String, String>, default_file: Option<&Path>
     }
 }
 
-fn handle_api_get(params: &HashMap<String, String>, default_file: Option<&Path>) -> (String, String) {
-    let file = params.get("file").map(|s| PathBuf::from(s)).or_else(|| default_file.map(|p| p.to_path_buf()));
+fn handle_api_get(
+    params: &HashMap<String, String>,
+    default_file: Option<&Path>,
+) -> (String, String) {
+    let file = params
+        .get("file")
+        .map(|s| PathBuf::from(s))
+        .or_else(|| default_file.map(|p| p.to_path_buf()));
     let p = match file {
         Some(f) => f,
         None => return ("400 Bad Request".into(), json_error("no file")),
@@ -132,64 +156,128 @@ fn handle_api_get(params: &HashMap<String, String>, default_file: Option<&Path>)
     match open_reader(&p) {
         Ok(r) => {
             if id >= r.len() {
-                return ("404 Not Found".into(), json_error(&format!("id {id} out of range {}", r.len())));
+                return (
+                    "404 Not Found".into(),
+                    json_error(&format!("id {id} out of range {}", r.len())),
+                );
             }
             match (r.get_quantized(id), r.get_vector(id)) {
                 (Ok(q), Ok(v)) => {
-                    let q_str = q.iter().map(|b| b.to_string()).collect::<Vec<_>>().join(",");
-                    let v_str = v.iter().map(|f| format!("{:.6}", f)).collect::<Vec<_>>().join(",");
-                    let body = format!("{{\"id\":{id},\"quantized\":[{q_str}],\"vector\":[{v_str}]}}");
+                    let q_str = q
+                        .iter()
+                        .map(|b| b.to_string())
+                        .collect::<Vec<_>>()
+                        .join(",");
+                    let v_str = v
+                        .iter()
+                        .map(|f| format!("{:.6}", f))
+                        .collect::<Vec<_>>()
+                        .join(",");
+                    let body =
+                        format!("{{\"id\":{id},\"quantized\":[{q_str}],\"vector\":[{v_str}]}}");
                     ("200 OK".into(), body)
                 }
-                (Err(e), _) | (_, Err(e)) => ("500 Internal Server Error".into(), json_error(&e.to_string())),
+                (Err(e), _) | (_, Err(e)) => (
+                    "500 Internal Server Error".into(),
+                    json_error(&e.to_string()),
+                ),
             }
         }
         Err(e) => ("500 Internal Server Error".into(), json_error(&e)),
     }
 }
 
-fn handle_api_search(params: &HashMap<String, String>, default_file: Option<&Path>) -> (String, String) {
-    let file = params.get("file").map(|s| PathBuf::from(s)).or_else(|| default_file.map(|p| p.to_path_buf()));
+fn handle_api_search(
+    params: &HashMap<String, String>,
+    default_file: Option<&Path>,
+) -> (String, String) {
+    let file = params
+        .get("file")
+        .map(|s| PathBuf::from(s))
+        .or_else(|| default_file.map(|p| p.to_path_buf()));
     let p = match file {
         Some(f) => f,
         None => return ("400 Bad Request".into(), json_error("no file")),
     };
     let query_str = match params.get("query") {
         Some(v) => v,
-        None => return ("400 Bad Request".into(), json_error("missing query (comma-separated floats)")),
+        None => {
+            return (
+                "400 Bad Request".into(),
+                json_error("missing query (comma-separated floats)"),
+            )
+        }
     };
     let k: usize = params.get("k").and_then(|s| s.parse().ok()).unwrap_or(5);
-    let query: Vec<f32> = query_str.split(',').filter_map(|s| s.trim().parse::<f32>().ok()).collect();
+    let query: Vec<f32> = query_str
+        .split(',')
+        .filter_map(|s| s.trim().parse::<f32>().ok())
+        .collect();
     if query.is_empty() {
-        return ("400 Bad Request".into(), json_error("query empty or not floats"));
+        return (
+            "400 Bad Request".into(),
+            json_error("query empty or not floats"),
+        );
     }
     match open_reader(&p) {
         Ok(r) => {
             if query.len() != r.dims() {
-                return ("400 Bad Request".into(), json_error(&format!("query dims {} != file dims {}", query.len(), r.dims())));
+                return (
+                    "400 Bad Request".into(),
+                    json_error(&format!(
+                        "query dims {} != file dims {}",
+                        query.len(),
+                        r.dims()
+                    )),
+                );
             }
             match r.search(&query, k) {
                 Ok(hits) => {
-                    let hits_json = hits.iter().map(|h| format!("{{\"id\":{},\"distance\":{:.6}}}", h.id, h.distance)).collect::<Vec<_>>().join(",");
-                    let body = format!("{{\"query\":[{}],\"k\":{k},\"hits\":[{hits_json}]}}", query.iter().map(|f| format!("{:.6}", f)).collect::<Vec<_>>().join(","));
+                    let hits_json = hits
+                        .iter()
+                        .map(|h| format!("{{\"id\":{},\"distance\":{:.6}}}", h.id, h.distance))
+                        .collect::<Vec<_>>()
+                        .join(",");
+                    let body = format!(
+                        "{{\"query\":[{}],\"k\":{k},\"hits\":[{hits_json}]}}",
+                        query
+                            .iter()
+                            .map(|f| format!("{:.6}", f))
+                            .collect::<Vec<_>>()
+                            .join(",")
+                    );
                     ("200 OK".into(), body)
                 }
-                Err(e) => ("500 Internal Server Error".into(), json_error(&e.to_string())),
+                Err(e) => (
+                    "500 Internal Server Error".into(),
+                    json_error(&e.to_string()),
+                ),
             }
         }
         Err(e) => ("500 Internal Server Error".into(), json_error(&e)),
     }
 }
 
-fn handle_api_validate(params: &HashMap<String, String>, default_file: Option<&Path>) -> (String, String) {
-    let file = params.get("file").map(|s| PathBuf::from(s)).or_else(|| default_file.map(|p| p.to_path_buf()));
+fn handle_api_validate(
+    params: &HashMap<String, String>,
+    default_file: Option<&Path>,
+) -> (String, String) {
+    let file = params
+        .get("file")
+        .map(|s| PathBuf::from(s))
+        .or_else(|| default_file.map(|p| p.to_path_buf()));
     let p = match file {
         Some(f) => f,
         None => return ("400 Bad Request".into(), json_error("no file")),
     };
     match crate::validate::validate(&p) {
         Ok(rep) => {
-            let warnings = rep.warnings.iter().map(|w| format!("\"{}\"", json_escape(w))).collect::<Vec<_>>().join(",");
+            let warnings = rep
+                .warnings
+                .iter()
+                .map(|w| format!("\"{}\"", json_escape(w)))
+                .collect::<Vec<_>>()
+                .join(",");
             let body = format!(
                 "{{\"path\":\"{}\",\"dims\":{},\"count\":{},\"footer_offset\":{},\"file_size\":{},\"checksum_valid\":{},\"row_ids_monotonic\":{},\"metadata_finite\":{},\"is_valid\":{},\"warnings\":[{}]}}",
                 json_escape(&rep.path),
@@ -205,12 +293,21 @@ fn handle_api_validate(params: &HashMap<String, String>, default_file: Option<&P
             );
             ("200 OK".into(), body)
         }
-        Err(e) => ("500 Internal Server Error".into(), json_error(&e.to_string())),
+        Err(e) => (
+            "500 Internal Server Error".into(),
+            json_error(&e.to_string()),
+        ),
     }
 }
 
-fn handle_api_stats(params: &HashMap<String, String>, default_file: Option<&Path>) -> (String, String) {
-    let file = params.get("file").map(|s| PathBuf::from(s)).or_else(|| default_file.map(|p| p.to_path_buf()));
+fn handle_api_stats(
+    params: &HashMap<String, String>,
+    default_file: Option<&Path>,
+) -> (String, String) {
+    let file = params
+        .get("file")
+        .map(|s| PathBuf::from(s))
+        .or_else(|| default_file.map(|p| p.to_path_buf()));
     let p = match file {
         Some(f) => f,
         None => return ("400 Bad Request".into(), json_error("no file")),
@@ -220,7 +317,11 @@ fn handle_api_stats(params: &HashMap<String, String>, default_file: Option<&Path
             let file_size = std::fs::metadata(&p).map(|m| m.len()).unwrap_or(0);
             let data_bytes = r.len() * r.dims() as u64;
             let original = data_bytes * 4;
-            let ratio = if data_bytes == 0 { 0.0 } else { original as f64 / data_bytes as f64 };
+            let ratio = if data_bytes == 0 {
+                0.0
+            } else {
+                original as f64 / data_bytes as f64
+            };
             let body = format!(
                 "{{\"path\":\"{}\",\"dims\":{},\"count\":{},\"file_size\":{},\"data_bytes\":{},\"original_bytes\":{},\"ratio\":{:.2}}}",
                 json_escape(&p.display().to_string()),
@@ -238,19 +339,47 @@ fn handle_api_stats(params: &HashMap<String, String>, default_file: Option<&Path
 }
 
 fn parse_vector(s: &str) -> Result<Vec<f32>, String> {
-    if s.trim().is_empty() { return Err("empty vector".into()); }
-    s.split(',').map(|x| x.trim().parse::<f32>().map_err(|_| format!("bad float '{x}'"))).collect()
+    if s.trim().is_empty() {
+        return Err("empty vector".into());
+    }
+    s.split(',')
+        .map(|x| {
+            x.trim()
+                .parse::<f32>()
+                .map_err(|_| format!("bad float '{x}'"))
+        })
+        .collect()
 }
 
-fn handle_api_quantize(params: &HashMap<String, String>, default_file: Option<&Path>) -> (String, String) {
-    let file = params.get("file").map(|s| PathBuf::from(s)).or_else(|| default_file.map(|p| p.to_path_buf()));
+fn handle_api_quantize(
+    params: &HashMap<String, String>,
+    default_file: Option<&Path>,
+) -> (String, String) {
+    let file = params
+        .get("file")
+        .map(|s| PathBuf::from(s))
+        .or_else(|| default_file.map(|p| p.to_path_buf()));
     let p = match file {
         Some(f) => f,
-        None => return ("400 Bad Request".into(), json_error("no file for quantizer")),
+        None => {
+            return (
+                "400 Bad Request".into(),
+                json_error("no file for quantizer"),
+            )
+        }
     };
-    let vec_str = match params.get("vector").or_else(|| params.get("query")).or_else(|| params.get("v")) {
+    let vec_str = match params
+        .get("vector")
+        .or_else(|| params.get("query"))
+        .or_else(|| params.get("v"))
+    {
         Some(v) => v,
-        None => return ("400 Bad Request".into(), json_error("missing vector (comma-separated)")),
+        None => {
+            return (
+                "400 Bad Request".into(),
+                json_error("missing vector (comma-separated)"),
+            )
+        }
     };
     let vec = match parse_vector(vec_str) {
         Ok(v) => v,
@@ -259,23 +388,62 @@ fn handle_api_quantize(params: &HashMap<String, String>, default_file: Option<&P
     match open_reader(&p) {
         Ok(r) => {
             if vec.len() != r.dims() {
-                return ("400 Bad Request".into(), json_error(&format!("vector dims {} != file dims {}", vec.len(), r.dims())));
+                return (
+                    "400 Bad Request".into(),
+                    json_error(&format!(
+                        "vector dims {} != file dims {}",
+                        vec.len(),
+                        r.dims()
+                    )),
+                );
             }
             match r.quantizer().quantize_vector(&vec) {
                 Ok(q) => {
                     let dq = match r.quantizer().dequantize_vector(&q) {
                         Ok(v) => v,
-                        Err(e) => return ("500 Internal Server Error".into(), json_error(&e.to_string())),
+                        Err(e) => {
+                            return (
+                                "500 Internal Server Error".into(),
+                                json_error(&e.to_string()),
+                            )
+                        }
                     };
-                    let q_str = q.iter().map(|b| b.to_string()).collect::<Vec<_>>().join(",");
-                    let v_str = vec.iter().map(|f| format!("{:.6}", f)).collect::<Vec<_>>().join(",");
-                    let dq_str = dq.iter().map(|f| format!("{:.6}", f)).collect::<Vec<_>>().join(",");
-                    let err: f32 = vec.iter().zip(dq.iter()).map(|(a,b)| (a-b).abs()).fold(0.0, f32::max);
-                    let mse = vec.iter().zip(dq.iter()).map(|(a,b)| { let d=a-b; d*d }).sum::<f32>() / vec.len() as f32;
+                    let q_str = q
+                        .iter()
+                        .map(|b| b.to_string())
+                        .collect::<Vec<_>>()
+                        .join(",");
+                    let v_str = vec
+                        .iter()
+                        .map(|f| format!("{:.6}", f))
+                        .collect::<Vec<_>>()
+                        .join(",");
+                    let dq_str = dq
+                        .iter()
+                        .map(|f| format!("{:.6}", f))
+                        .collect::<Vec<_>>()
+                        .join(",");
+                    let err: f32 = vec
+                        .iter()
+                        .zip(dq.iter())
+                        .map(|(a, b)| (a - b).abs())
+                        .fold(0.0, f32::max);
+                    let mse = vec
+                        .iter()
+                        .zip(dq.iter())
+                        .map(|(a, b)| {
+                            let d = a - b;
+                            d * d
+                        })
+                        .sum::<f32>()
+                        / vec.len() as f32;
                     let body = format!("{{\"vector\":[{v_str}],\"quantized\":[{q_str}],\"dequantized\":[{dq_str}],\"max_error\":{err:.6},\"mse\":{mse:.6}}}");
                     ("200 OK".into(), body)
                 }
-                Err(e) => ("500 Internal Server Error".into(), json_error(&e.to_string())),
+                Err(e) => (
+                    "500 Internal Server Error".into(),
+                    json_error(&e.to_string()),
+                ),
             }
         }
         Err(e) => ("500 Internal Server Error".into(), json_error(&e)),
@@ -292,18 +460,44 @@ fn handle_api_distance(params: &HashMap<String, String>) -> (String, String) {
         None => return ("400 Bad Request".into(), json_error("missing b")),
     };
     let metric_str = params.get("metric").map(|s| s.as_str()).unwrap_or("l2");
-    let a = match parse_vector(a_str) { Ok(v) => v, Err(e) => return ("400 Bad Request".into(), json_error(&e)) };
-    let b = match parse_vector(b_str) { Ok(v) => v, Err(e) => return ("400 Bad Request".into(), json_error(&e)) };
+    let a = match parse_vector(a_str) {
+        Ok(v) => v,
+        Err(e) => return ("400 Bad Request".into(), json_error(&e)),
+    };
+    let b = match parse_vector(b_str) {
+        Ok(v) => v,
+        Err(e) => return ("400 Bad Request".into(), json_error(&e)),
+    };
     let res: Result<f32, String> = match metric_str.to_lowercase().as_str() {
         "l2" | "euclidean" => crate::distance::l2_squared(&a, &b).map_err(|e| e.to_string()),
         "l2norm" => crate::distance::l2(&a, &b).map_err(|e| e.to_string()),
         "cos" | "cosine" => crate::distance::cosine_distance(&a, &b).map_err(|e| e.to_string()),
         "dot" => crate::distance::dot(&a, &b).map_err(|e| e.to_string()),
         "ip" => crate::distance::inner_product_distance(&a, &b).map_err(|e| e.to_string()),
-        other => return ("400 Bad Request".into(), json_error(&format!("unknown metric {other}"))),
+        other => {
+            return (
+                "400 Bad Request".into(),
+                json_error(&format!("unknown metric {other}")),
+            )
+        }
     };
     match res {
-        Ok(d) => ("200 OK".into(), format!("{{\"a\":[{}],\"b\":[{}],\"metric\":\"{}\",\"distance\":{:.6}}}", a.iter().map(|x| format!("{:.6}", x)).collect::<Vec<_>>().join(","), b.iter().map(|x| format!("{:.6}", x)).collect::<Vec<_>>().join(","), json_escape(metric_str), d)),
+        Ok(d) => (
+            "200 OK".into(),
+            format!(
+                "{{\"a\":[{}],\"b\":[{}],\"metric\":\"{}\",\"distance\":{:.6}}}",
+                a.iter()
+                    .map(|x| format!("{:.6}", x))
+                    .collect::<Vec<_>>()
+                    .join(","),
+                b.iter()
+                    .map(|x| format!("{:.6}", x))
+                    .collect::<Vec<_>>()
+                    .join(","),
+                json_escape(metric_str),
+                d
+            ),
+        ),
         Err(e) => ("400 Bad Request".into(), json_error(&e)),
     }
 }
@@ -313,8 +507,15 @@ fn handle_api_transform(params: &HashMap<String, String>) -> (String, String) {
         Some(v) => v,
         None => return ("400 Bad Request".into(), json_error("missing vector")),
     };
-    let vec = match parse_vector(vec_str) { Ok(v) => v, Err(e) => return ("400 Bad Request".into(), json_error(&e)) };
-    let typ = params.get("type").or_else(|| params.get("t")).map(|s| s.as_str()).unwrap_or("normalize");
+    let vec = match parse_vector(vec_str) {
+        Ok(v) => v,
+        Err(e) => return ("400 Bad Request".into(), json_error(&e)),
+    };
+    let typ = params
+        .get("type")
+        .or_else(|| params.get("t"))
+        .map(|s| s.as_str())
+        .unwrap_or("normalize");
     let out: Result<Vec<f32>, String> = match typ.to_lowercase().as_str() {
         "normalize" | "norm" => {
             let t = crate::transform::Normalizer::new(vec.len());
@@ -330,9 +531,23 @@ fn handle_api_transform(params: &HashMap<String, String>) -> (String, String) {
     };
     match out {
         Ok(o) => {
-            let in_str = vec.iter().map(|x| format!("{:.6}", x)).collect::<Vec<_>>().join(",");
-            let out_str = o.iter().map(|x| format!("{:.6}", x)).collect::<Vec<_>>().join(",");
-            ("200 OK".into(), format!("{{\"input\":[{in_str}],\"type\":\"{}\",\"output\":[{out_str}]}}", json_escape(typ)))
+            let in_str = vec
+                .iter()
+                .map(|x| format!("{:.6}", x))
+                .collect::<Vec<_>>()
+                .join(",");
+            let out_str = o
+                .iter()
+                .map(|x| format!("{:.6}", x))
+                .collect::<Vec<_>>()
+                .join(",");
+            (
+                "200 OK".into(),
+                format!(
+                    "{{\"input\":[{in_str}],\"type\":\"{}\",\"output\":[{out_str}]}}",
+                    json_escape(typ)
+                ),
+            )
         }
         Err(e) => ("400 Bad Request".into(), json_error(&e)),
     }
@@ -340,44 +555,104 @@ fn handle_api_transform(params: &HashMap<String, String>) -> (String, String) {
 
 fn handle_api_dataset(params: &HashMap<String, String>) -> (String, String) {
     let dims: usize = params.get("dims").and_then(|s| s.parse().ok()).unwrap_or(4);
-    let count: usize = params.get("count").and_then(|s| s.parse().ok()).unwrap_or(5);
-    if dims == 0 || dims > 1024 { return ("400 Bad Request".into(), json_error("dims 1..1024")); }
-    if count == 0 || count > 100 { return ("400 Bad Request".into(), json_error("count 1..100")); }
-    let seed: u64 = params.get("seed").and_then(|s| s.parse().ok()).unwrap_or(42);
+    let count: usize = params
+        .get("count")
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(5);
+    if dims == 0 || dims > 1024 {
+        return ("400 Bad Request".into(), json_error("dims 1..1024"));
+    }
+    if count == 0 || count > 100 {
+        return ("400 Bad Request".into(), json_error("count 1..100"));
+    }
+    let seed: u64 = params
+        .get("seed")
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(42);
     let typ = params.get("type").map(|s| s.as_str()).unwrap_or("uniform");
     let ds = match typ {
         "uniform" => crate::dataset::Dataset::synthetic_uniform(count, dims, -1.0, 1.0, seed),
         "clustered" => crate::dataset::Dataset::synthetic_clustered(count, dims, 3, 0.2, seed),
-        _ => return ("400 Bad Request".into(), json_error("type uniform or clustered")),
+        _ => {
+            return (
+                "400 Bad Request".into(),
+                json_error("type uniform or clustered"),
+            )
+        }
     };
-    let vecs_json = ds.vectors.iter().map(|v| format!("[{}]", v.iter().map(|x| format!("{:.4}", x)).collect::<Vec<_>>().join(","))).collect::<Vec<_>>().join(",");
+    let vecs_json = ds
+        .vectors
+        .iter()
+        .map(|v| {
+            format!(
+                "[{}]",
+                v.iter()
+                    .map(|x| format!("{:.4}", x))
+                    .collect::<Vec<_>>()
+                    .join(",")
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(",");
     ("200 OK".into(), format!("{{\"dims\":{dims},\"count\":{count},\"type\":\"{}\",\"seed\":{seed},\"vectors\":[{vecs_json}]}}", json_escape(typ)))
 }
 
-fn handle_api_batch(params: &HashMap<String, String>, default_file: Option<&Path>) -> (String, String) {
-    let file = params.get("file").map(|s| PathBuf::from(s)).or_else(|| default_file.map(|p| p.to_path_buf()));
+fn handle_api_batch(
+    params: &HashMap<String, String>,
+    default_file: Option<&Path>,
+) -> (String, String) {
+    let file = params
+        .get("file")
+        .map(|s| PathBuf::from(s))
+        .or_else(|| default_file.map(|p| p.to_path_buf()));
     let p = match file {
         Some(f) => f,
         None => return ("400 Bad Request".into(), json_error("no file")),
     };
-    let start: u64 = params.get("start").and_then(|s| s.parse().ok()).unwrap_or(0);
-    let count: u64 = params.get("count").and_then(|s| s.parse().ok()).unwrap_or(10);
-    if count > 100 { return ("400 Bad Request".into(), json_error("count max 100")); }
+    let start: u64 = params
+        .get("start")
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(0);
+    let count: u64 = params
+        .get("count")
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(10);
+    if count > 100 {
+        return ("400 Bad Request".into(), json_error("count max 100"));
+    }
     match open_reader(&p) {
         Ok(r) => {
             let mut out = Vec::new();
             for i in 0..count {
                 let id = start + i;
-                if id >= r.len() { break; }
+                if id >= r.len() {
+                    break;
+                }
                 match r.get_vector(id) {
                     Ok(v) => {
-                        let s = v.iter().map(|x| format!("{:.4}", x)).collect::<Vec<_>>().join(",");
+                        let s = v
+                            .iter()
+                            .map(|x| format!("{:.4}", x))
+                            .collect::<Vec<_>>()
+                            .join(",");
                         out.push(format!("{{\"id\":{id},\"vector\":[{s}]}}"));
                     }
-                    Err(e) => return ("500 Internal Server Error".into(), json_error(&e.to_string())),
+                    Err(e) => {
+                        return (
+                            "500 Internal Server Error".into(),
+                            json_error(&e.to_string()),
+                        )
+                    }
                 }
             }
-            ("200 OK".into(), format!("{{\"start\":{start},\"count\":{},\"vectors\":[{}]}}", out.len(), out.join(",")))
+            (
+                "200 OK".into(),
+                format!(
+                    "{{\"start\":{start},\"count\":{},\"vectors\":[{}]}}",
+                    out.len(),
+                    out.join(",")
+                ),
+            )
         }
         Err(e) => ("500 Internal Server Error".into(), json_error(&e)),
     }
@@ -396,7 +671,11 @@ fn handle_client(mut stream: TcpStream, default_file: Option<PathBuf>) {
     let method = parts.next().unwrap_or("");
     let path_full = parts.next().unwrap_or("/");
     if method != "GET" {
-        write_json(&mut stream, "405 Method Not Allowed", &json_error("only GET"));
+        write_json(
+            &mut stream,
+            "405 Method Not Allowed",
+            &json_error("only GET"),
+        );
         return;
     }
     let (path, query) = match path_full.find('?') {
@@ -408,10 +687,20 @@ fn handle_client(mut stream: TcpStream, default_file: Option<PathBuf>) {
 
     match path {
         "/" | "/index.html" => {
-            write_response(&mut stream, "200 OK", "text/html; charset=utf-8", GUI_HTML.as_bytes());
+            write_response(
+                &mut stream,
+                "200 OK",
+                "text/html; charset=utf-8",
+                GUI_HTML.as_bytes(),
+            );
         }
         "/style.css" => {
-            write_response(&mut stream, "200 OK", "text/css; charset=utf-8", GUI_CSS.as_bytes());
+            write_response(
+                &mut stream,
+                "200 OK",
+                "text/css; charset=utf-8",
+                GUI_CSS.as_bytes(),
+            );
         }
         "/api/info" => {
             let (status, body) = handle_api_info(&params, default_ref);

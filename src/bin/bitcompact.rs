@@ -2,7 +2,7 @@ use std::env;
 use std::fs;
 use std::path::Path;
 
-use bit_compact::{CompactReader, CompactWriter, DistanceMetric, QuantType, Quantizer, validate};
+use bit_compact::{validate, CompactReader, CompactWriter, DistanceMetric, QuantType, Quantizer};
 
 fn print_usage() {
     eprintln!(
@@ -76,20 +76,30 @@ fn cmd_create(args: &[String]) -> Result<(), String> {
     while i < args.len() {
         match args[i].as_str() {
             "--dims" => {
-                dims = Some(args.get(i + 1).ok_or("--dims needs value")?.parse::<usize>().map_err(|e| e.to_string())?);
+                dims = Some(
+                    args.get(i + 1)
+                        .ok_or("--dims needs value")?
+                        .parse::<usize>()
+                        .map_err(|e| e.to_string())?,
+                );
                 i += 2;
             }
             "--metric" => {
                 metric = parse_metric(args.get(i + 1).ok_or("--metric needs value")?)?;
                 i += 2;
             }
-            "--align" => { align = true; i += 1; }
+            "--align" => {
+                align = true;
+                i += 1;
+            }
             other => return Err(format!("unknown flag {other}")),
         }
     }
     // For demo, create empty file with dummy quantizer (min 0 max 1 per dim)
     let d = dims.unwrap_or(8);
-    if d == 0 || d > 65535 { return Err("dims must be 1..65535".into()); }
+    if d == 0 || d > 65535 {
+        return Err("dims must be 1..65535".into());
+    }
     let mins = vec![0.0f32; d];
     let maxs = vec![1.0f32; d];
     let q = Quantizer::new(mins, maxs).map_err(|e| e.to_string())?;
@@ -106,7 +116,9 @@ fn cmd_create(args: &[String]) -> Result<(), String> {
 }
 
 fn cmd_info(args: &[String]) -> Result<(), String> {
-    if args.len() != 1 { return Err("info <file>".into()); }
+    if args.len() != 1 {
+        return Err("info <file>".into());
+    }
     let path = &args[0];
     let r = CompactReader::open(path).map_err(|e| e.to_string())?;
     println!("file: {path}");
@@ -120,9 +132,13 @@ fn cmd_info(args: &[String]) -> Result<(), String> {
 }
 
 fn cmd_get(args: &[String]) -> Result<(), String> {
-    if args.len() != 2 { return Err("get <file> <id>".into()); }
+    if args.len() != 2 {
+        return Err("get <file> <id>".into());
+    }
     let r = CompactReader::open(&args[0]).map_err(|e| e.to_string())?;
-    let id: u64 = args[1].parse().map_err(|e: std::num::ParseIntError| e.to_string())?;
+    let id: u64 = args[1]
+        .parse()
+        .map_err(|e: std::num::ParseIntError| e.to_string())?;
     let v = r.get_vector(id).map_err(|e| e.to_string())?;
     println!("id {id}: {:?}", v);
     // also show quantized
@@ -132,7 +148,9 @@ fn cmd_get(args: &[String]) -> Result<(), String> {
 }
 
 fn cmd_search(args: &[String]) -> Result<(), String> {
-    if args.len() < 3 { return Err("search <file> --query x,y,z --k K".into()); }
+    if args.len() < 3 {
+        return Err("search <file> --query x,y,z --k K".into());
+    }
     let file = &args[0];
     let mut query: Option<Vec<f32>> = None;
     let mut k = 5usize;
@@ -141,12 +159,17 @@ fn cmd_search(args: &[String]) -> Result<(), String> {
         match args[i].as_str() {
             "--query" => {
                 let s = args.get(i + 1).ok_or("--query needs value")?;
-                let vals: Result<Vec<f32>, _> = s.split(',').map(|x| x.trim().parse::<f32>()).collect();
+                let vals: Result<Vec<f32>, _> =
+                    s.split(',').map(|x| x.trim().parse::<f32>()).collect();
                 query = Some(vals.map_err(|e| e.to_string())?);
                 i += 2;
             }
             "--k" => {
-                k = args.get(i + 1).ok_or("--k needs value")?.parse().map_err(|e: std::num::ParseIntError| e.to_string())?;
+                k = args
+                    .get(i + 1)
+                    .ok_or("--k needs value")?
+                    .parse()
+                    .map_err(|e: std::num::ParseIntError| e.to_string())?;
                 i += 2;
             }
             other => return Err(format!("unknown flag {other}")),
@@ -154,19 +177,27 @@ fn cmd_search(args: &[String]) -> Result<(), String> {
     }
     let q = query.ok_or("--query required")?;
     let r = CompactReader::open(file).map_err(|e| e.to_string())?;
-    if q.len() != r.dims() { return Err(format!("query dims {} != file dims {}", q.len(), r.dims())); }
+    if q.len() != r.dims() {
+        return Err(format!("query dims {} != file dims {}", q.len(), r.dims()));
+    }
     let hits = r.search(&q, k).map_err(|e| e.to_string())?;
     println!("top {k} for query {:?}:", q);
-    for h in hits { println!("  id={} dist={:.6}", h.id, h.distance); }
+    for h in hits {
+        println!("  id={} dist={:.6}", h.id, h.distance);
+    }
     Ok(())
 }
 
 fn cmd_validate(args: &[String]) -> Result<(), String> {
-    if args.len() != 1 { return Err("validate <file>".into()); }
+    if args.len() != 1 {
+        return Err("validate <file>".into());
+    }
     let rep = validate::validate(&args[0]).map_err(|e| e.to_string())?;
     println!("{}", rep.summary());
     if !rep.warnings.is_empty() {
-        for w in &rep.warnings { println!("  warn: {w}"); }
+        for w in &rep.warnings {
+            println!("  warn: {w}");
+        }
     }
     if rep.is_valid() {
         println!("valid: true");
@@ -177,13 +208,19 @@ fn cmd_validate(args: &[String]) -> Result<(), String> {
 }
 
 fn cmd_stats(args: &[String]) -> Result<(), String> {
-    if args.len() != 1 { return Err("stats <file>".into()); }
+    if args.len() != 1 {
+        return Err("stats <file>".into());
+    }
     let path = &args[0];
     let r = CompactReader::open(path).map_err(|e| e.to_string())?;
     let file_size = fs::metadata(path).map(|m| m.len()).unwrap_or(0);
     let data_bytes = r.len() * r.dims() as u64;
     let original_bytes = data_bytes * 4;
-    let ratio = if data_bytes == 0 { 0.0 } else { original_bytes as f64 / data_bytes as f64 };
+    let ratio = if data_bytes == 0 {
+        0.0
+    } else {
+        original_bytes as f64 / data_bytes as f64
+    };
     println!("file: {path}");
     println!("  file_size: {file_size} B");
     println!("  data_bytes (quantized): {data_bytes} B");
@@ -193,8 +230,15 @@ fn cmd_stats(args: &[String]) -> Result<(), String> {
     // Sample quantization error for first vector if exists
     if r.len() > 0 {
         let qv = r.get_quantized(0).map_err(|e| e.to_string())?;
-        let dq = r.quantizer().dequantize_vector(&qv).map_err(|e| e.to_string())?;
-        println!("  sample id 0 quantized {:?} -> dequant {:?}", &qv[..qv.len().min(8)], &dq[..dq.len().min(4)]);
+        let dq = r
+            .quantizer()
+            .dequantize_vector(&qv)
+            .map_err(|e| e.to_string())?;
+        println!(
+            "  sample id 0 quantized {:?} -> dequant {:?}",
+            &qv[..qv.len().min(8)],
+            &dq[..dq.len().min(4)]
+        );
     }
     Ok(())
 }
@@ -208,7 +252,9 @@ fn cmd_serve(args: &[String]) -> Result<(), String> {
         match args[i].as_str() {
             "--port" => {
                 let p = args.get(i + 1).ok_or("--port needs value")?;
-                port = p.parse().map_err(|e: std::num::ParseIntError| e.to_string())?;
+                port = p
+                    .parse()
+                    .map_err(|e: std::num::ParseIntError| e.to_string())?;
                 i += 2;
             }
             "--host" => {
@@ -217,7 +263,9 @@ fn cmd_serve(args: &[String]) -> Result<(), String> {
             }
             s if s.starts_with("--") => return Err(format!("unknown flag {s}")),
             other => {
-                if file.is_some() { return Err(format!("extra arg {other}")); }
+                if file.is_some() {
+                    return Err(format!("extra arg {other}"));
+                }
                 file = Some(other.to_string());
                 i += 1;
             }

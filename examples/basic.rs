@@ -11,7 +11,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Calibrate per-dimension bounds
     let quantizer = Quantizer::calibrate(&dataset)?;
-    println!("dims={} range sample dim0 [{}, {}]", quantizer.dims(), quantizer.min_bounds()[0], quantizer.max_bounds()[0]);
+    println!(
+        "dims={} range sample dim0 [{}, {}]",
+        quantizer.dims(),
+        quantizer.min_bounds()[0],
+        quantizer.max_bounds()[0]
+    );
 
     let path = "/tmp/bitcompact_basic.btcp";
     let _ = std::fs::remove_file(path);
@@ -26,7 +31,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Reader — 1-seek random access
     let r = CompactReader::open(path)?;
-    println!("read header: dims={} count={} footer_offset={}", r.dims(), r.len(), r.footer_offset());
+    println!(
+        "read header: dims={} count={} footer_offset={}",
+        r.dims(),
+        r.len(),
+        r.footer_offset()
+    );
 
     // Zero-alloc quantized read
     let mut qbuf = vec![0u8; r.dims()];
@@ -35,7 +45,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Dequantized
     let deq = r.get_vector(1)?;
-    println!("dequant[1]={:?} orig {:?} err {:?}", deq, dataset[1], vec![deq[0]-dataset[1][0], deq[1]-dataset[1][1], deq[2]-dataset[1][2]]);
+    println!(
+        "dequant[1]={:?} orig {:?} err {:?}",
+        deq,
+        dataset[1],
+        vec![
+            deq[0] - dataset[1][0],
+            deq[1] - dataset[1][1],
+            deq[2] - dataset[1][2]
+        ]
+    );
 
     // Batch
     let batch = r.get_batch(&[0, 2])?;

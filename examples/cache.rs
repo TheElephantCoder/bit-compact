@@ -1,12 +1,21 @@
-use bit_compact::{CachedReader, CompactReader, CompactWriter, DistanceMetric, QuantType, Quantizer};
+use bit_compact::{
+    CachedReader, CompactReader, CompactWriter, DistanceMetric, QuantType, Quantizer,
+};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let data = vec![vec![0.0, 1.0], vec![1.0, 0.0], vec![0.5, 0.5], vec![0.9, 0.1]];
+    let data = vec![
+        vec![0.0, 1.0],
+        vec![1.0, 0.0],
+        vec![0.5, 0.5],
+        vec![0.9, 0.1],
+    ];
     let q = Quantizer::calibrate(&data)?;
     let path = "/tmp/bitcompact_cache.btcp";
     let _ = std::fs::remove_file(path);
     let mut w = CompactWriter::create(path, q, QuantType::SQ8, DistanceMetric::L2)?;
-    for v in &data { w.append(v)?; }
+    for v in &data {
+        w.append(v)?;
+    }
     w.finalize()?;
 
     let r = CompactReader::open(path)?;

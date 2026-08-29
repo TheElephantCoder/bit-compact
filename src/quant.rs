@@ -284,7 +284,9 @@ impl Quantizer {
         }
         let dims = vectors[0].len();
         if dims == 0 {
-            return Err(CompactError::invalid_header("global calibrate: dims must be > 0"));
+            return Err(CompactError::invalid_header(
+                "global calibrate: dims must be > 0",
+            ));
         }
         let mut gmin = f32::INFINITY;
         let mut gmax = f32::NEG_INFINITY;

@@ -131,7 +131,11 @@ pub fn batch_l2_squared(query: &[f32], dataset: &[Vec<f32>]) -> Result<Vec<f32>>
     Ok(out)
 }
 
-pub fn batch_distance(metric: DistanceMetric, query: &[f32], dataset: &[Vec<f32>]) -> Result<Vec<f32>> {
+pub fn batch_distance(
+    metric: DistanceMetric,
+    query: &[f32],
+    dataset: &[Vec<f32>],
+) -> Result<Vec<f32>> {
     let mut out = Vec::with_capacity(dataset.len());
     for v in dataset {
         out.push(distance(metric, query, v)?);

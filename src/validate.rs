@@ -24,7 +24,11 @@ pub struct ValidationReport {
 
 impl ValidationReport {
     pub fn is_valid(&self) -> bool {
-        self.checksum_valid && self.row_ids_monotonic && self.metadata_finite && self.footer_size_ok && self.warnings.is_empty()
+        self.checksum_valid
+            && self.row_ids_monotonic
+            && self.metadata_finite
+            && self.footer_size_ok
+            && self.warnings.is_empty()
     }
 
     pub fn summary(&self) -> String {
@@ -133,7 +137,9 @@ pub fn validate<P: AsRef<Path>>(path: P) -> Result<ValidationReport> {
             if let Some(p) = prev {
                 if id <= p {
                     row_ids_monotonic = false;
-                    warnings.push(format!("row ids not strictly increasing: {p} -> {id} at {i}"));
+                    warnings.push(format!(
+                        "row ids not strictly increasing: {p} -> {id} at {i}"
+                    ));
                 }
             }
             if id != i {
@@ -160,7 +166,9 @@ pub fn validate<P: AsRef<Path>>(path: P) -> Result<ValidationReport> {
             let mut computed_ok = true;
             while remaining > 0 {
                 let to_read = (remaining as usize).min(CHUNK);
-                if buf.len() != to_read { buf.resize(to_read, 0); }
+                if buf.len() != to_read {
+                    buf.resize(to_read, 0);
+                }
                 if file.read_exact(&mut buf).is_err() {
                     computed_ok = false;
                     checksum_valid = false;
@@ -176,7 +184,8 @@ pub fn validate<P: AsRef<Path>>(path: P) -> Result<ValidationReport> {
                     checksum_valid = false;
                     warnings.push(format!(
                         "checksum mismatch expected {:02x?}.. found {:02x?}..",
-                        &stored[..4], &computed[..4]
+                        &stored[..4],
+                        &computed[..4]
                     ));
                 }
             }
@@ -205,7 +214,8 @@ pub fn validate<P: AsRef<Path>>(path: P) -> Result<ValidationReport> {
 pub fn quick_check<P: AsRef<Path>>(path: P) -> Result<bool> {
     let mut file = File::open(path.as_ref()).map_err(|e| CompactError::IoError { source: e })?;
     let mut buf = [0u8; HEADER_SIZE];
-    file.read_exact(&mut buf).map_err(|e| CompactError::IoError { source: e })?;
+    file.read_exact(&mut buf)
+        .map_err(|e| CompactError::IoError { source: e })?;
     let header = Header::from_bytes(&buf)?;
     let file_len = file.metadata().map(|m| m.len()).unwrap_or(0);
     Ok(header.validate_footer(file_len).is_ok())
@@ -214,7 +224,7 @@ pub fn quick_check<P: AsRef<Path>>(path: P) -> Result<bool> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::quant::{Quantizer, QuantType, DistanceMetric};
+    use crate::quant::{DistanceMetric, QuantType, Quantizer};
     use crate::storage::CompactWriter;
     use std::fs;
 
@@ -225,8 +235,11 @@ mod tests {
         let mut p = std::env::temp_dir();
         p.push(format!("validate_ok_{}.btcp", std::process::id()));
         let _ = fs::remove_file(&p);
-        let mut w = CompactWriter::create(&p, q, QuantType::SQ8, DistanceMetric::L2).expect("create");
-        for v in &data { w.append(v).expect("append"); }
+        let mut w =
+            CompactWriter::create(&p, q, QuantType::SQ8, DistanceMetric::L2).expect("create");
+        for v in &data {
+            w.append(v).expect("append");
+        }
         w.finalize().expect("fin");
         let rep = validate(&p).expect("validate");
         assert!(rep.is_valid(), "report not valid: {}", rep.summary());

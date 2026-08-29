@@ -48,23 +48,29 @@ pub mod transform;
 pub mod validate;
 
 // Re-exports for ergonomic crate root
-pub use aligned::{AlignedBuffer, BlockAlignedBuffer, CacheAlignedBuffer, StackBuf, CACHE_LINE, DISK_BLOCK};
-pub use batch::{BatchWriter, ChunkedReader, parallel_batch_search, parallel_calibrate};
+pub use aligned::{
+    AlignedBuffer, BlockAlignedBuffer, CacheAlignedBuffer, StackBuf, CACHE_LINE, DISK_BLOCK,
+};
+pub use batch::{parallel_batch_search, parallel_calibrate, BatchWriter, ChunkedReader};
 pub use cache::{CachedReader, LruCache};
 pub use config::{CompactConfig, ConfigBuilder, ReaderConfig, WriterConfig};
-pub use dataset::{Dataset, format_vector};
-pub use distance::{cosine_distance, cosine_similarity, dot, inner_product_distance, l2, l2_squared};
+pub use dataset::{format_vector, Dataset};
+pub use distance::{
+    cosine_distance, cosine_similarity, dot, inner_product_distance, l2, l2_squared,
+};
 pub use errors::{CompactError, Result};
 pub use header::{Header, DISK_BLOCK_SIZE, HEADER_SIZE, MAGIC};
-pub use metrics::{SearchMetrics, evaluate_search, mrr, recall_precision_at_k};
+pub use metrics::{evaluate_search, mrr, recall_precision_at_k, SearchMetrics};
 pub use ops::{add as vec_add, l2_norm, mean as vec_mean, scale as vec_scale, sub as vec_sub};
 pub use quant::{DistanceMetric, QuantType, Quantizer};
-pub use search::{SearchResult, brute_force_search, parallel_search};
-pub use sha::{Sha256, sha256};
-pub use stats::{QuantizationReport, evaluate as evaluate_quantization};
+pub use search::{brute_force_search, parallel_search, SearchResult};
+pub use sha::{sha256, Sha256};
+pub use stats::{evaluate as evaluate_quantization, QuantizationReport};
 pub use storage::{CompactReader, CompactWriter, CHECKSUM_SIZE};
-pub use transform::{transform_dataset, Centering, Chain, Identity, Normalizer, Standardizer, Transform};
-pub use validate::{ValidationReport, quick_check, validate};
+pub use transform::{
+    transform_dataset, Centering, Chain, Identity, Normalizer, Standardizer, Transform,
+};
+pub use validate::{quick_check, validate, ValidationReport};
 
 // Crate version constants mirroring header version fields
 /// Default major version written to new files.
@@ -87,7 +93,10 @@ mod integration_tests {
 
     fn tmp(name: &str) -> std::path::PathBuf {
         let mut p = std::env::temp_dir();
-        p.push(format!("bitcompact_integ_{name}_{}.btcp", std::process::id()));
+        p.push(format!(
+            "bitcompact_integ_{name}_{}.btcp",
+            std::process::id()
+        ));
         p
     }
 
@@ -98,15 +107,22 @@ mod integration_tests {
         let count = 100u64;
         // Synthetic embeddings in [-1, 1]
         let dataset: Vec<Vec<f32>> = (0..count)
-            .map(|i| (0..dims).map(|d| ((i * dims as u64 + d as u64) % 200) as f32 / 100.0 - 1.0).collect())
+            .map(|i| {
+                (0..dims)
+                    .map(|d| ((i * dims as u64 + d as u64) % 200) as f32 / 100.0 - 1.0)
+                    .collect()
+            })
             .collect();
 
         let f32_bytes = count as usize * dims * 4;
         let quantizer = Quantizer::calibrate(&dataset).expect("calibrate");
         let path = tmp("reduction");
         let _ = fs::remove_file(&path);
-        let mut w = CompactWriter::create(&path, quantizer, QuantType::SQ8, DistanceMetric::Cosine).expect("create");
-        for v in &dataset { w.append(v).expect("append"); }
+        let mut w = CompactWriter::create(&path, quantizer, QuantType::SQ8, DistanceMetric::Cosine)
+            .expect("create");
+        for v in &dataset {
+            w.append(v).expect("append");
+        }
         w.finalize().expect("finalize");
 
         let meta = fs::metadata(&path).expect("meta");

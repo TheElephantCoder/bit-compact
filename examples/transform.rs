@@ -1,11 +1,7 @@
-use bit_compact::{Centering, Normalizer, Standardizer, Transform, transform_dataset};
+use bit_compact::{transform_dataset, Centering, Normalizer, Standardizer, Transform};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let data = vec![
-        vec![1.0, 10.0],
-        vec![3.0, 20.0],
-        vec![5.0, 30.0],
-    ];
+    let data = vec![vec![1.0, 10.0], vec![3.0, 20.0], vec![5.0, 30.0]];
 
     // Center
     let cent = Centering::from_data(&data)?;
@@ -23,7 +19,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let norm = Normalizer::new(2);
     let mut out = vec![0.0; 2];
     norm.transform(&[3.0, 4.0], &mut out)?;
-    println!("normalize [3,4] -> {:?} norm {}", out, (out[0]*out[0]+out[1]*out[1]).sqrt());
+    println!(
+        "normalize [3,4] -> {:?} norm {}",
+        out,
+        (out[0] * out[0] + out[1] * out[1]).sqrt()
+    );
 
     // Chain: center then normalize
     let chain = bit_compact::transform::Chain::new(cent, norm)?;

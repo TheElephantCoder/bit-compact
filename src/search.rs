@@ -193,7 +193,11 @@ where
                     if reader_ref.get_quantized_into(id, &mut q_buf).is_err() {
                         continue;
                     }
-                    if reader_ref.quantizer().dequantize_into(&q_buf, &mut f_buf).is_err() {
+                    if reader_ref
+                        .quantizer()
+                        .dequantize_into(&q_buf, &mut f_buf)
+                        .is_err()
+                    {
                         continue;
                     }
                     let dist = match distance_fn(q_ref, &f_buf) {
@@ -254,7 +258,11 @@ impl<'a> Iterator for ScanIter<'a> {
         if let Err(e) = self.reader.get_quantized_into(id, &mut self.q_buf) {
             return Some(Err(e));
         }
-        if let Err(e) = self.reader.quantizer().dequantize_into(&self.q_buf, &mut self.f_buf) {
+        if let Err(e) = self
+            .reader
+            .quantizer()
+            .dequantize_into(&self.q_buf, &mut self.f_buf)
+        {
             return Some(Err(e));
         }
         Some(Ok((id, self.f_buf.clone())))
@@ -272,7 +280,7 @@ impl<'a> ExactSizeIterator for ScanIter<'a> {}
 mod tests {
     use super::*;
     use crate::distance;
-    use crate::quant::{DistanceMetric, Quantizer, QuantType};
+    use crate::quant::{DistanceMetric, QuantType, Quantizer};
     use crate::storage::CompactWriter;
     use std::fs;
 
@@ -293,7 +301,8 @@ mod tests {
                 .as_nanos()
         ));
         let _ = fs::remove_file(&p);
-        let mut w = CompactWriter::create(&p, q, QuantType::SQ8, DistanceMetric::L2).expect("create");
+        let mut w =
+            CompactWriter::create(&p, q, QuantType::SQ8, DistanceMetric::L2).expect("create");
         for v in data {
             w.append(v).expect("append");
         }

@@ -114,7 +114,12 @@ impl Sha256 {
     fn compress(&mut self, block: &[u8; 64]) {
         let mut w = [0u32; 64];
         for i in 0..16 {
-            w[i] = u32::from_be_bytes([block[i * 4], block[i * 4 + 1], block[i * 4 + 2], block[i * 4 + 3]]);
+            w[i] = u32::from_be_bytes([
+                block[i * 4],
+                block[i * 4 + 1],
+                block[i * 4 + 2],
+                block[i * 4 + 3],
+            ]);
         }
         for i in 16..64 {
             let s0 = w[i - 15].rotate_right(7) ^ w[i - 15].rotate_right(18) ^ (w[i - 15] >> 3);
@@ -377,15 +382,7 @@ impl CompactWriter {
         let mut file = File::create(&path).map_err(|e| CompactError::IoError { source: e })?;
 
         // Write placeholder header (count=0, footer_offset=0) — `src/storage.rs:381`
-        let header = Header::new(
-            major,
-            minor,
-            dims as u16,
-            quant_type,
-            distance_metric,
-            0,
-            0,
-        );
+        let header = Header::new(major, minor, dims as u16, quant_type, distance_metric, 0, 0);
         file.write_all(&header.to_bytes())
             .map_err(|e| CompactError::IoError { source: e })?;
 
@@ -740,14 +737,13 @@ impl CompactReader {
             }
         }
         let mut checksum = [0u8; CHECKSUM_SIZE];
-        file.read_exact(&mut checksum)
-            .map_err(|e| {
-                if e.kind() == io::ErrorKind::UnexpectedEof {
-                    CompactError::CorruptedFooter(format!("truncated checksum: {e}"))
-                } else {
-                    CompactError::IoError { source: e }
-                }
-            })?;
+        file.read_exact(&mut checksum).map_err(|e| {
+            if e.kind() == io::ErrorKind::UnexpectedEof {
+                CompactError::CorruptedFooter(format!("truncated checksum: {e}"))
+            } else {
+                CompactError::IoError { source: e }
+            }
+        })?;
 
         // --- Cryptographic verification: SHA-256 of data block ---
         // Read data block (may be large; stream in 64 KiB chunks to avoid huge alloc).
@@ -1052,7 +1048,10 @@ impl CompactReader {
     }
 
     /// Open with explicit `ReaderConfig` — control verification/prefetch.
-    pub fn open_with_config<P: AsRef<Path>>(path: P, config: crate::config::ReaderConfig) -> Result<Self> {
+    pub fn open_with_config<P: AsRef<Path>>(
+        path: P,
+        config: crate::config::ReaderConfig,
+    ) -> Result<Self> {
         if config.verify_checksum {
             Self::open(path)
         } else {
@@ -1113,7 +1112,11 @@ impl CompactReader {
     /// Estimate total file size on disk (header + meta + data + footer).
     #[inline]
     pub fn estimated_file_size(&self) -> u64 {
-        HEADER_SIZE as u64 + self.metadata_len as u64 + self.data_len() + self.row_ids.len() as u64 * 8 + CHECKSUM_SIZE as u64
+        HEADER_SIZE as u64
+            + self.metadata_len as u64
+            + self.data_len()
+            + self.row_ids.len() as u64 * 8
+            + CHECKSUM_SIZE as u64
     }
 
     #[inline]
@@ -1172,7 +1175,10 @@ mod tests {
 
     fn tmp_path(name: &str) -> PathBuf {
         let mut p = std::env::temp_dir();
-        p.push(format!("bitcompact_test_{name}_{}.btcp", std::process::id()));
+        p.push(format!(
+            "bitcompact_test_{name}_{}.btcp",
+            std::process::id()
+        ));
         p
     }
 
@@ -1191,18 +1197,18 @@ mod tests {
         assert_eq!(
             sha256(b""),
             [
-                0xe3, 0xb0, 0xc4, 0x42, 0x98, 0xfc, 0x1c, 0x14, 0x9a, 0xfb, 0xf4, 0xc8, 0x99, 0x6f, 0xb9,
-                0x24, 0x27, 0xae, 0x41, 0xe4, 0x64, 0x9b, 0x93, 0x4c, 0xa4, 0x95, 0x99, 0x1b, 0x78, 0x52,
-                0xb8, 0x55
+                0xe3, 0xb0, 0xc4, 0x42, 0x98, 0xfc, 0x1c, 0x14, 0x9a, 0xfb, 0xf4, 0xc8, 0x99, 0x6f,
+                0xb9, 0x24, 0x27, 0xae, 0x41, 0xe4, 0x64, 0x9b, 0x93, 0x4c, 0xa4, 0x95, 0x99, 0x1b,
+                0x78, 0x52, 0xb8, 0x55
             ]
         );
         // "abc"
         assert_eq!(
             sha256(b"abc"),
             [
-                0xba, 0x78, 0x16, 0xbf, 0x8f, 0x01, 0xcf, 0xea, 0x41, 0x41, 0x40, 0xde, 0x5d, 0xae, 0x22,
-                0x23, 0xb0, 0x03, 0x61, 0xa3, 0x96, 0x17, 0x7a, 0x9c, 0xb4, 0x10, 0xff, 0x61, 0xf2, 0x00,
-                0x15, 0xad
+                0xba, 0x78, 0x16, 0xbf, 0x8f, 0x01, 0xcf, 0xea, 0x41, 0x41, 0x40, 0xde, 0x5d, 0xae,
+                0x22, 0x23, 0xb0, 0x03, 0x61, 0xa3, 0x96, 0x17, 0x7a, 0x9c, 0xb4, 0x10, 0xff, 0x61,
+                0xf2, 0x00, 0x15, 0xad
             ]
         );
     }
@@ -1217,7 +1223,8 @@ mod tests {
             vec![-1.0, 0.5, 10.0],
         ];
         let q = Quantizer::calibrate(&data).expect("calibrate");
-        let mut w = CompactWriter::create(&path, q, QuantType::SQ8, DistanceMetric::L2).expect("create");
+        let mut w =
+            CompactWriter::create(&path, q, QuantType::SQ8, DistanceMetric::L2).expect("create");
         for v in &data {
             w.append(v).expect("append");
         }
@@ -1247,7 +1254,8 @@ mod tests {
         let _ = fs::remove_file(&path);
         let data = vec![vec![1.0, 2.0]; 5];
         let q = Quantizer::calibrate(&data).expect("calibrate");
-        let mut w = CompactWriter::create(&path, q, QuantType::SQ8, DistanceMetric::Cosine).expect("create");
+        let mut w = CompactWriter::create(&path, q, QuantType::SQ8, DistanceMetric::Cosine)
+            .expect("create");
         for v in &data {
             w.append(v).expect("append");
         }

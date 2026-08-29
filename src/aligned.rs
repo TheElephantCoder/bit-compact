@@ -60,7 +60,11 @@ impl<const ALIGN: usize> AlignedBuffer<ALIGN> {
             if ptr.is_null() {
                 return None;
             }
-            return Some(Self { ptr, layout, len: 0 });
+            return Some(Self {
+                ptr,
+                layout,
+                len: 0,
+            });
         }
         let layout = Layout::from_size_align(len, ALIGN).ok()?;
         let ptr = unsafe { alloc(layout) };
