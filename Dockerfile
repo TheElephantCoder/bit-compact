@@ -3,8 +3,7 @@ FROM rust:1.77-bookworm AS builder
 WORKDIR /app
 
 # cache deps first (no deps here, but keep pattern for future)
-COPY Cargo.toml ./
-COPY Cargo.lock ./
+COPY Cargo.toml Cargo.lock* ./
 COPY src ./src
 COPY benches ./benches
 COPY examples ./examples
