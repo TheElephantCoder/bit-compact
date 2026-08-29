@@ -1,6 +1,7 @@
 # bit-compact
 
 ![Rust](https://img.shields.io/badge/rust-%23000000.svg?style=for-the-badge&logo=rust&logoColor=white)
+![Docker](https://img.shields.io/badge/docker-%230db7ed.svg?style=for-the-badge&logo=docker&logoColor=white)
 ![GitHub](https://img.shields.io/badge/github-%23121011.svg?style=for-the-badge&logo=github&logoColor=white)
 ![GitHub Actions](https://img.shields.io/badge/github%20actions-%232671E5.svg?style=for-the-badge&logo=githubactions&logoColor=white)
 ![Git](https://img.shields.io/badge/git-%23F05033.svg?style=for-the-badge&logo=git&logoColor=white)
@@ -173,6 +174,29 @@ cargo run --release --bench quant_bench  # 10k x128 quantize + l2
 - `src/server.rs` — `serve` + polished GUI (10 APIs, sidebar tabs, canvas charts, toast)
 - `src/bin/bitcompact.rs` — CLI (`create`/`info`/`get`/`search`/`validate`/`stats`/`serve`)
 - `src/lib.rs` — re-exports + `VERSION_MAJOR/MINOR`
+
+## Docker
+
+Run without installing Rust — multi-stage build, runtime is `debian:bookworm-slim` + `tini`, binary is stripped.
+
+```bash
+# build
+docker build -t bit-compact .
+
+# CLI (mount your data dir)
+docker run --rm -v $(pwd)/data:/data bit-compact info /data/vectors.btcp
+docker run --rm -v $(pwd)/data:/data bit-compact get /data/vectors.btcp 42
+docker run --rm -v $(pwd)/data:/data bit-compact validate /data/vectors.btcp
+
+# GUI — serve on http://localhost:8080
+docker run --rm -p 8080:8080 -v $(pwd)/data:/data bit-compact serve /data/vectors.btcp --port 8080 --host 0.0.0.0
+# then open http://localhost:8080
+
+# create a new file via docker
+docker run --rm -v $(pwd)/data:/data bit-compact create /data/new.btcp --dims 128 --metric cosine --align
+```
+
+`Dockerfile` is `1.4` syntax, builder `rust:1.77-bookworm`, runtime `debian:bookworm-slim`, `EXPOSE 8080`, `VOLUME ["/data"]`, `ENTRYPOINT ["tini","--","bitcompact"]`. See `Dockerfile:1` and `.dockerignore:1`.
 
 ## Build
 

@@ -1,0 +1,10 @@
+target
+.git
+.gitignore
+.github
+gh-pages
+.idea
+.vscode
+*.btcp
+.DS_Store
+tmp
