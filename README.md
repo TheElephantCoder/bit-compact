@@ -101,6 +101,15 @@ Builder pattern, validation (`dims <= 65535`), version, `align_disk_blocks`, `ve
 ### `transform` — Vector pre-processing
 `Transform` trait (`Identity`, `Normalizer`, `Centering::from_data`, `Standardizer::from_data`, `Chain::new`), `transform_dataset`. Use before calibration to improve SNR.
 
+### `pipeline` — Transform → quantize chain
+`Pipeline::new().add_transform(Normalizer::new(dims)).with_quantizer(q).run(vec)` — sequential transforms then SQ8, `run_batch`.
+
+### `export` — JSON / CSV
+`export_json(reader, path)`, `export_csv(reader, path)` — dump dequantized vectors for interop.
+
+### `index` — Simple inverted index (demo)
+`SimpleIndex::build(reader)` — per-dim `HashMap<u8, Vec<u64>>` postings, `lookup(dim, byte)`, `stats()`.
+
 ### `dataset` — Synthetic & JSON helpers
 `Dataset::new`, `synthetic_uniform(count,dims,low,high,seed)` (xorshift, deterministic), `synthetic_clustered(count,dims,clusters,spread,seed)`, `from_json_array("[[0,1],[3,4]]")`, `format_vector`.
 
@@ -126,17 +135,18 @@ cargo run --bin bitcompact -- serve vectors.btcp --port 8080  # GUI at http://12
 cargo run --bin bitcompact -- serve --port 3000               # open any file via GUI
 ```
 
-### `server` — `bitcompact serve` GUI (zero-dep HTTP, really good)
+### `server` — `bitcompact serve` GUI (zero-dep HTTP, really good & easier)
 `server::serve(path, host, port)` — `std::net::TcpListener` + thread-per-connection, 10 JSON APIs: `/` (GUI), `/api/info`, `/api/get?id=`, `/api/batch?start=&count=`, `/api/search?query=&k=`, `/api/quantize?vector=`, `/api/distance?a=&b=&metric=`, `/api/transform?vector=&type=`, `/api/dataset?dims=&count=&type=`, `/api/validate`, `/api/stats`, `/api/health`.
 
-Polished single-page app (no deps, dark theme, sidebar tabs):
-- **Dashboard** — file info, stats, validation, quick actions
-- **Vectors** — paginated browser, batch table, canvas bar/line chart, prev/next, quantized vs dequant
-- **Search** — query builder (dims-aware), metric selector, k, bar chart of distances, results table
-- **Quantize** — input vector → quantized bytes → dequant → max_error/mse + overlay chart (original vs dequant)
-- **Distance** — two vectors + metric → distance, with copy
-- **Transform** — normalize/identity on vector, chart
-- **Dataset** — generate uniform/clustered synthetic, preview table, seed control
+Polished single-page app (no deps, dark theme, Helvetica everywhere except logo, sidebar tabs, tour):
+- **Dashboard** — file info, stats, validation, quick actions + drag-drop JSON zone + `Tour` button (auto-steps 9 tabs, 1.8s each, toast)
+- **Vectors** — paginated browser, batch table, canvas bar/line chart, prev/next, quantized vs dequant, tooltips
+- **Search** — query builder (dims-aware placeholder), metric selector, k, `Random` fill, bar chart, tooltips
+- **Quantize** — input vector → quantized bytes → dequant → max_error/mse + overlay chart (teal original / blue dequant), `Use current vector`
+- **Distance** — two vectors + metric → distance, with copy, tooltips
+- **Transform** — normalize/identity on vector, chart, tooltips
+- **Dataset** — generate uniform/clustered synthetic, preview table, seed control, tooltips
+- **Validate/Create** — full report, drag-drop JSON preview, `Preview` hint
 - **Validate** — full `ValidationReport` pretty-printed
 - **Create** — dry-run JSON preview + CLI hint
 All tabs share file input, toast logs, `localStorage`-free, 1-seek per vector via cached reader path, canvas charts are 700×140, responsive grid.
@@ -165,13 +175,16 @@ cargo run --release --bench quant_bench  # 10k x128 quantize + l2
 - `src/batch.rs` — `BatchWriter`, `ChunkedReader`, `parallel_calibrate`, `parallel_batch_search`
 - `src/validate.rs` — `validate`, `ValidationReport`, `quick_check`
 - `src/transform.rs` — `Transform`, `Normalizer`, `Centering`, `Standardizer`, `Chain`
+- `src/pipeline.rs` — `Pipeline` (transform chain → quantize)
+- `src/export.rs` — `export_json/csv`
+- `src/index.rs` — `SimpleIndex` (postings per dim/byte)
 - `src/dataset.rs` — `Dataset`, `synthetic_uniform/clustered`, `from_json_array`
 - `src/ops.rs` — `vec_add/sub/scale`, `l2_norm`, `vec_mean/variance`
 - `src/metrics.rs` — `recall_precision_at_k`, `mrr`, `evaluate_search`
 - `src/header.rs` — `Header` 32B BE, `validate_footer`
 - `src/sha.rs` — `Sha256` FIPS, `sha256`
 - `src/storage.rs` — `CompactWriter`, `CompactReader` (1-seek, `Send+Sync`, `get_batch`, `search`)
-- `src/server.rs` — `serve` + polished GUI (10 APIs, sidebar tabs, canvas charts, toast)
+- `src/server.rs` — `serve` + polished GUI (10 APIs, sidebar tabs, canvas charts, toast, tour, drag-drop)
 - `src/bin/bitcompact.rs` — CLI (`create`/`info`/`get`/`search`/`validate`/`stats`/`serve`)
 - `src/lib.rs` — re-exports + `VERSION_MAJOR/MINOR`
 

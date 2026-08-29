@@ -35,9 +35,12 @@ pub mod config;
 pub mod dataset;
 pub mod distance;
 pub mod errors;
+pub mod export;
 pub mod header;
+pub mod index;
 pub mod metrics;
 pub mod ops;
+pub mod pipeline;
 pub mod quant;
 pub mod search;
 pub mod server;
@@ -59,9 +62,12 @@ pub use distance::{
     cosine_distance, cosine_similarity, dot, inner_product_distance, l2, l2_squared,
 };
 pub use errors::{CompactError, Result};
+pub use export::{export_csv, export_json};
 pub use header::{Header, DISK_BLOCK_SIZE, HEADER_SIZE, MAGIC};
+pub use index::SimpleIndex;
 pub use metrics::{evaluate_search, mrr, recall_precision_at_k, SearchMetrics};
 pub use ops::{add as vec_add, l2_norm, mean as vec_mean, scale as vec_scale, sub as vec_sub};
+pub use pipeline::Pipeline;
 pub use quant::{DistanceMetric, QuantType, Quantizer};
 pub use search::{brute_force_search, parallel_search, SearchResult};
 pub use sha::{sha256, Sha256};

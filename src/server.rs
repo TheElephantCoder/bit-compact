@@ -807,7 +807,8 @@ canvas{width:100%;height:140px;background:var(--code);border:1px solid var(--bor
 .table th, .table td{padding:8px 10px;border-bottom:1px solid var(--border);text-align:left}
 .table th{color:var(--muted);font-weight:600;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;font-family:var(--font)}
 .pill{font:11px var(--font);padding:2px 6px;border-radius:999px;background:var(--code);border:1px solid var(--border)}
-.toast{position:fixed;bottom:16px;right:16px;background:var(--fg);color:var(--bg);padding:10px 14px;border-radius:8px;font:13px var(--font);box-shadow:0 8px 24px rgba(0,0,0,0.4);display:none}
+.toast{position:fixed;bottom:16px;right:16px;background:var(--fg);color:var(--bg);padding:10px 14px;border-radius:8px;font:13px var(--font);box-shadow:0 8px 24px rgba(0,0,0,0.4);display:none;z-index:30}
+.tour-highlight{outline:2px solid var(--accent);outline-offset:2px;box-shadow:0 0 0 4px rgba(110,231,183,0.15)}
 "##;
 
 const GUI_HTML: &str = r##"<!doctype html>
@@ -825,23 +826,24 @@ const GUI_HTML: &str = r##"<!doctype html>
     <div style="font:12px ui-monospace,monospace;color:var(--muted);margin-top:2px;" id="headerFile">no file</div>
   </div>
   <div style="display:flex;gap:8px;align-items:center;">
-    <input id="fileInput" placeholder="/tmp/vectors.btcp" style="width:260px">
-    <button onclick="loadInfo()">Open</button>
+    <input id="fileInput" placeholder="/tmp/vectors.btcp" style="width:260px" title="Enter path to .btcp file, or drag & drop JSON below">
+    <button onclick="loadInfo()" title="Load file and refresh all tabs">Open</button>
+    <button class="ghost" onclick="startTour()" title="Guided tour for first-time users">Tour</button>
     <span class="badge" id="headerBadge">offline</span>
   </div>
 </header>
 
 <div class="layout">
   <nav class="sidebar">
-    <button data-tab="dashboard" class="active">Dashboard</button>
-    <button data-tab="vectors">Vectors</button>
-    <button data-tab="search">Search</button>
-    <button data-tab="quantize">Quantize</button>
-    <button data-tab="distance">Distance</button>
-    <button data-tab="transform">Transform</button>
-    <button data-tab="dataset">Dataset</button>
-    <button data-tab="validate">Validate</button>
-    <button data-tab="create">Create</button>
+    <button data-tab="dashboard" class="active" title="Overview, file info, stats, quick actions">Dashboard</button>
+    <button data-tab="vectors" title="Browse vectors, 1 seek per get, batch view">Vectors</button>
+    <button data-tab="search" title="Top-k search with query builder and metric">Search</button>
+    <button data-tab="quantize" title="Quantize any vector and see error">Quantize</button>
+    <button data-tab="distance" title="Compute L2, cosine, dot, IP">Distance</button>
+    <button data-tab="transform" title="Normalize, center, standardize">Transform</button>
+    <button data-tab="dataset" title="Generate uniform or clustered synthetic data">Dataset</button>
+    <button data-tab="validate" title="Checksum, row_ids, metadata checks">Validate</button>
+    <button data-tab="create" title="Preview creation from JSON">Create</button>
     <div class="hint">1 seek · 0 alloc<br>BTCP 32B · SHA-256<br><span id="sidebarStats">—</span></div>
   </nav>
 
@@ -850,7 +852,8 @@ const GUI_HTML: &str = r##"<!doctype html>
     <section id="tab-dashboard" class="tab active">
       <h2 style="margin:0 0 12px;">Dashboard</h2>
       <div class="grid">
-        <div class="card"><h3>File info</h3><div class="kv" id="info">loading…</div><div class="row" style="margin-top:12px"><button onclick="loadInfo()">Reload</button><button class="ghost" onclick="doValidate()">Validate</button></div><pre id="validateOut" style="display:none;margin-top:10px"></pre></div>
+        <div class="card"><h3>File info</h3><div class="kv" id="info">loading…</div><div class="row" style="margin-top:12px"><button onclick="loadInfo()">Reload</button><button class="ghost" onclick="doValidate()">Validate</button></div><pre id="validateOut" style="display:none;margin-top:10px"></pre>
+        <div class="card" id="dropZone" style="margin-top:12px;border:1.5px dashed var(--border);text-align:center;padding:16px" title="Drag & drop a .json array like [[0,1],[3,4]] to preview dataset generation">Drop JSON here or paste below to generate preview</div></div>
         <div class="card"><h3>Stats</h3><div class="kv" id="stats">—</div><button class="ghost" onclick="loadStats()" style="margin-top:12px">Refresh</button></div>
       </div>
       <div class="card" style="margin-top:14px"><h3>Quick actions</h3><div class="row"><button onclick="switchTab('vectors')">Browse vectors</button><button onclick="switchTab('search')">Search</button><button onclick="switchTab('quantize')">Quantize playground</button><button class="ghost" onclick="loadBatch()">Load batch 0-9</button></div><pre id="quickLog">GUI ready. All APIs: /api/info, /api/get, /api/batch, /api/search, /api/quantize, /api/distance, /api/transform, /api/dataset, /api/validate, /api/stats</pre></div>
@@ -1112,6 +1115,30 @@ function switchTab(name){
   document.querySelector(`.sidebar button[data-tab="${name}"]`).classList.add('active');
   if(name==='vectors' && dims) loadVector();
 }
+function startTour(){
+  const steps=["dashboard","vectors","search","quantize","distance","transform","dataset","validate","create"];
+  let i=0;
+  function next(){
+    if(i>=steps.length){ toast("Tour done — try Search or Quantize!"); return; }
+    switchTab(steps[i]);
+    toast("Step "+(i+1)+"/"+steps.length+": "+steps[i]);
+    i++;
+    setTimeout(next, 1800);
+  }
+  next();
+}
+document.addEventListener('dragover', e=>{ e.preventDefault(); const z=document.getElementById('dropZone'); if(z) z.style.borderColor='var(--accent)'; });
+document.addEventListener('dragleave', e=>{ const z=document.getElementById('dropZone'); if(z) z.style.borderColor='var(--border)'; });
+document.addEventListener('drop', async e=>{
+  e.preventDefault();
+  const z=document.getElementById('dropZone'); if(z) z.style.borderColor='var(--border)';
+  const text = e.dataTransfer.getData('text') || await e.dataTransfer.files[0]?.text() || '';
+  if(text.trim().startsWith('[')){
+    document.getElementById('createInput').value=text.trim().slice(0,2000);
+    switchTab('create');
+    toast("Dropped JSON — preview in Create tab");
+  }
+});
 document.querySelectorAll('.sidebar button').forEach(b=>b.addEventListener('click',()=>switchTab(b.dataset.tab)));
 loadInfo();
 </script>
