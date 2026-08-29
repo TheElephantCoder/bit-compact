@@ -1,5 +1,11 @@
 # bit-compact
 
+![Rust](https://img.shields.io/badge/rust-%23000000.svg?style=for-the-badge&logo=rust&logoColor=white)
+![GitHub](https://img.shields.io/badge/github-%23121011.svg?style=for-the-badge&logo=github&logoColor=white)
+![GitHub Actions](https://img.shields.io/badge/github%20actions-%232671E5.svg?style=for-the-badge&logo=githubactions&logoColor=white)
+![Git](https://img.shields.io/badge/git-%23F05033.svg?style=for-the-badge&logo=git&logoColor=white)
+![Apache](https://img.shields.io/badge/apache-%23D42029.svg?style=for-the-badge&logo=apache&logoColor=white)
+
 Zero-dependency low-level multimodal embedding compression & file format engine in Rust — SQ8 scalar quantization with O(1) random-access binary storage.
 
 Inspired by columnar formats like Lance. Provides 4× space reduction (`f32` → `u8`), Big-Endian portable layout, zero-allocation seeks, and `Send + Sync` readers for concurrent analytical scans.
